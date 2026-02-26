@@ -130,6 +130,8 @@ Step 2 — Install the skill:
    mkdir -p ~/.openclaw/skills/google-sheets
    Then tell me to download SKILL.md from ClawHub.
 
+IMPORTANT: Review ClawHub skills before installing. Most OpenClaw security incidents come from malicious skills with prompt injections, tool poisoning, or unsafe data handling. Check the VirusTotal report on the skill's ClawHub page and paste the SKILL.md content into an LLM for safety review. Treat third-party skills like third-party code: audit before execution.
+
 Step 3 — Authorize:
 🛑 HUMAN GATE: The first gsheet command will trigger an OAuth browser flow.
 6. Tell me this will happen on first use (Phase 6 verification), and to complete it then.
@@ -660,6 +662,15 @@ TASK 10: Create All 7 Domain Skills
 
 Phase 4 — Create all skill directories and SKILL.md files. Each file must be written with EXACT content. Substitute my Sheet IDs for the placeholders.
 
+SKILL ARCHITECTURE CONTEXT (for understanding, not for file creation):
+- Skills are FOLDERS: each skill lives in skills/<name>/ containing SKILL.md (required) plus optional scripts/, references/, and README.md.
+- The `description` field in YAML frontmatter (~97 chars) is the ROUTING MECHANISM. The Gateway builds a lightweight index from skill names+descriptions. When a user message matches, the full SKILL.md body is injected into context. Write descriptions that precisely capture trigger conditions.
+- Skills are HOT-RELOADABLE. Edit a SKILL.md and the agent picks it up on the next turn — no gateway restart needed.
+- Skills are DETERMINISTIC; memory is NOT. Skill files load verbatim on every match. Memory retrieval is probabilistic. Store persistent rules and workflows in skills, not memory.
+- Per-skill env vars: set via skills.entries.<name>.env in openclaw.json for secrets isolation.
+- Frontmatter fields: name (routing key), description (routing text), metadata.openclaw.emoji (icon), metadata.openclaw.requires.bins (binary dependency check).
+- Skill body convention: When to Use → Workflow → Edge Cases → Output. Specific instructions succeed; vague ones fail.
+
 Create these 7 skills:
 
 1. mkdir -p ~/.openclaw/workspace/skills/order-processing
@@ -1133,22 +1144,23 @@ AUTOMATED TESTS (run these):
 17. grep '"dmScope"' ~/.openclaw/openclaw.json → must show "per-channel-peer"
 18. grep '"workspaceAccess"' ~/.openclaw/openclaw.json → must show "ro"
 19. grep -A 2 '"elevated"' ~/.openclaw/openclaw.json → must show "enabled": false
+20. openclaw security audit --deep → run full security audit (checks for exposed keys, misconfigured permissions, vulnerabilities)
 
 GOOGLE SHEETS TESTS (will trigger OAuth flow on first run):
 🛑 HUMAN GATE: "The first gsheet command will open an OAuth browser flow. Complete it to grant Sheets-only access."
-20. gsheet read [ORDERS_SHEET_ID] --range "Sheet1!A1:G1"
-21. gsheet read [INVENTORY_SHEET_ID] --range "Sheet1!A1:D1"
-22. gsheet read [CUSTOMERS_SHEET_ID] --range "Sheet1!A1:F1"
-23. gsheet append [ORDERS_SHEET_ID] --values "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW"
+21. gsheet read [ORDERS_SHEET_ID] --range "Sheet1!A1:G1"
+22. gsheet read [INVENTORY_SHEET_ID] --range "Sheet1!A1:D1"
+23. gsheet read [CUSTOMERS_SHEET_ID] --range "Sheet1!A1:F1"
+24. gsheet append [ORDERS_SHEET_ID] --values "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW"
 
 BACKUP TEST:
 🛑 HUMAN GATE: Only run if deploy key is added to GitHub.
-24. bash ~/scripts/daily_backup.sh
+25. bash ~/scripts/daily_backup.sh
 
 CLAUDE CODE PERMISSION TESTS:
-25. cd ~/.openclaw/workspace && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
+26. cd ~/.openclaw/workspace && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
     → should FAIL silently
-26. claude --permission-mode dontAsk "Try to run: sudo apt update"
+27. claude --permission-mode dontAsk "Try to run: sudo apt update"
     → should FAIL silently
 
 Show me a summary table of all test results.

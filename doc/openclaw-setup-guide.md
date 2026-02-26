@@ -206,6 +206,8 @@ mkdir -p ~/.openclaw/skills/google-sheets
 # Check VirusTotal report: https://clawhub.ai/skills/google-sheets
 ```
 
+> ⚠️ **Review ClawHub skills before installing.** Most OpenClaw security incidents come from malicious skills that contain prompt injections, tool poisoning, or unsafe data handling. Before running `openclaw skill install`, check the skill's VirusTotal report on its ClawHub page, and paste the SKILL.md content into an LLM for a safety review. Treat third-party skills like third-party code: audit before execution.
+
 **Step 3: Authorize**
 
 The first time the agent uses a `gsheet` command, it will prompt for OAuth authorization. Complete the browser flow to grant Sheets-only access. The refresh token is stored locally in `~/.openclaw/credentials/`.
@@ -777,6 +779,24 @@ OpenClaw cannot exec, spawn, or reference Claude Code in any way.
 Create custom skills in `~/.openclaw/workspace/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gsheet` CLI.
 
 > **Claude Code users:** This is the highest-ROI phase for Claude Code. Give it all your placeholder values and let it create all 7 skill files in one session. Example: `"Create all 7 domain skills from the setup guide, using these sheet IDs: Orders=[ID], Inventory=[ID], Customers=[ID]"`.
+
+#### Skill Architecture (How Skills Work)
+
+Before creating skills, understand how OpenClaw processes them:
+
+- **Skills are folders**, not single files. Each skill lives in `skills/<name>/` and contains at minimum a `SKILL.md`. Optionally include `scripts/` (helper scripts), `references/` (state files, templates), and `README.md` (human documentation).
+
+- **The `description` field is the routing mechanism.** On startup, the Gateway reads every skill's `name` and `description` (~97 characters) into a lightweight index. When a user message arrives, the Gateway matches it against this index. On match, the full `SKILL.md` body is injected into the agent's context for that turn. A vague description means missed matches; an overly broad one means unnecessary context injection. Write descriptions that precisely capture the skill's trigger conditions.
+
+- **Skills are hot-reloadable.** Edit a `SKILL.md` and the agent picks up changes on the next turn — no gateway restart needed. This makes iterative skill development fast: edit, send a test message, observe, repeat.
+
+- **Skills are deterministic; memory is not.** Skill files are loaded into context verbatim every time they match. Memory (daily markdown + SQLite search) is retrieved probabilistically based on relevance scoring. Store persistent behavioral instructions, workflows, and rules in skills — not in memory. Memory is for facts the agent learns during conversations (customer preferences, order history, resolved issues).
+
+- **Per-skill environment variables** can be set via `skills.entries.<name>.env` in `openclaw.json` for secrets isolation. This keeps credentials scoped to the skill that needs them rather than exposing them globally.
+
+- **Frontmatter fields:** `name` (routing key), `description` (routing text), `metadata.openclaw.emoji` (display icon), `metadata.openclaw.requires.bins` (binary dependency check — Gateway verifies these exist before enabling the skill).
+
+- **Skill body convention:** The 7 skills below follow a runbook format: **When to Use** (trigger conditions) → **Workflow** (step-by-step actions) → **Edge Cases** (what to do when things go wrong) → **Output** (expected response format). This structure gives the agent clear, unambiguous instructions. Vague skill instructions ("handle orders appropriately") fail; specific ones ("validate items against inventory sheet, reject if quantity < 1, confirm via WhatsApp with order summary") succeed.
 
 **4.1 — Order Processing Skill**
 
@@ -1420,6 +1440,13 @@ When you need to update skills — new products, changed workflows, seasonal adj
 6. Test the change: send a test message via WhatsApp group (for customer-facing skills) or Telegram DM (for operator skills). Verify correct behavior.
 7. If the change breaks something: `git checkout -- skills/<skill-name>/SKILL.md` (reverts to checkpoint)
 8. If the change works: `git add -A && git commit -m "skill update: [description]" && git push`
+9. Run `openclaw security audit --deep` after any skill edit to check for exposed keys, misconfigured permissions, and vulnerabilities.
+
+**Skill editing principles:**
+
+- **Store in skills, not memory.** Skills are loaded deterministically on every matching turn. Memory is retrieved probabilistically and may not surface across sessions. If you want the agent to always follow a rule, put it in a SKILL.md — not in a conversation.
+- **Be specific.** Vague instructions fail. Include exact conditions ("when the customer says 'cancel'"), exact actions ("update column F to 'CANCELLED'"), exact formats ("reply with order ID, items, and refund amount"), and exact recipients ("confirm with the customer, then notify operator via Telegram").
+- **Cross-skill coordination must be explicit.** The agent won't infer that a new skill should hand off to an existing skill. If `order-amendment` needs to trigger `inventory-check` after modifying an order, add explicit handoff instructions in the `order-amendment` SKILL.md body (e.g., "After amending quantities, follow the Inventory Check workflow to verify stock levels").
 
 > **What the agent CAN modify (from operator Telegram DM only):**
 > - Skills: `skills/*/SKILL.md` — minor updates only (e.g., adding a product category). Agent will propose the change and wait for operator confirmation before writing.
@@ -1461,6 +1488,7 @@ When you need to update skills — new products, changed workflows, seasonal adj
 | **Sandbox isolation** | **`openclaw.json` → `sandbox`** | **Execution** | **Docker container boundary** |
 | **Workspace write (main session)** | **`write`/`edit` tools + `fs.workspaceOnly: true`** | **Execution** | **Operator DM can modify workspace files (skills, memory) — constrained by SOUL.md self-modification rules** |
 | **Workspace write (sandbox)** | **`sandbox.workspaceAccess: "ro"`** | **Execution** | **WhatsApp group CANNOT modify workspace files (hard enforcement — write/edit/apply_patch disabled)** |
+| **Skill routing / selection** | **`description` field in SKILL.md frontmatter (~97 chars)** | **Execution** | **Gateway matches user request against skill index; full SKILL.md injected on match** |
 | **Skill hot-reload** | **`openclaw.json` → `skills.load.watch: true`** | **Execution** | **Skill changes picked up on next agent turn without restart** |
 | **CRON session isolation** | **`openclaw.json` → `cron.defaultSessionTarget: "isolated"`** | **Execution** | **CRON jobs run sandboxed — cannot modify workspace files** |
 | **Self-modification rules** | **`SOUL.md` → Self-Modification Rules** | **Reasoning** | **Agent must get operator confirmation before modifying skills; must not modify SOUL.md/AGENTS.md/TOOLS.md** |
