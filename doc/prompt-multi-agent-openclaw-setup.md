@@ -19,6 +19,7 @@
 > - tmux installed and configured
 >
 > **These are Phase 1, steps 1.1–1.8 from the setup guide. Everything below starts at Phase 2.**
+> - OpenClaw v2026.1.29 or later (required — earlier versions have CVE-2026-25253, a critical RCE)
 
 ---
 
@@ -135,13 +136,29 @@ TASK 1: Install OpenClaw & Initial Gateway Configuration
 ═══════════════════════════════════════════════════════════
 
 Phase 2.1 — Install OpenClaw:
-1. Download the install script (do NOT pipe directly to bash):
+
+IMPORTANT — DigitalOcean 1-Click alternative: OpenClaw is on the DigitalOcean Marketplace as a 1-Click image. However, it ships v2026.1.24-1, which is VULNERABLE to CVE-2026-25253 (1-Click RCE, CVSS 8.8). If using 1-Click, run `openclaw upgrade` immediately. Manual install below is recommended.
+
+0. Pre-install — verify Node.js v22+:
+   node --version
+   If below v22, install it: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+   Or let the OpenClaw install script handle it.
+
+1. Install OpenClaw (Option A — recommended):
+   npm install -g openclaw@latest
+   If npm is not available, use Option B:
    curl -fsSL https://openclaw.ai -o /tmp/install-openclaw.sh
-2. Show me the first 20 lines so I can review it.
+   Show me the first 20 lines so I can review it.
    🛑 HUMAN GATE: Wait for me to approve the script before running it.
-3. After approval: bash /tmp/install-openclaw.sh
-4. Run: openclaw onboard --install-daemon
+   After approval: bash /tmp/install-openclaw.sh
+
+2. Run: openclaw onboard --install-daemon
    🛑 HUMAN GATE: The onboarding wizard may ask interactive questions. Walk me through each prompt.
+
+3. CRITICAL — Verify version:
+   openclaw --version
+   Must show v2026.1.29 or later. Versions before this are vulnerable to CVE-2026-25253
+   (auth token exfiltration via WebSocket, CVSS 8.8). If older: openclaw upgrade
 
 Phase 2.2 — Bind Gateway to localhost:
 5. Edit ~/.openclaw/openclaw.json to set the initial gateway config:
@@ -157,6 +174,9 @@ Phase 2.2 — Bind Gateway to localhost:
    }
    Use the Gateway Auth Token from my business values, or generate a strong random token if I haven't provided one (openssl rand -hex 32).
 
+   NOTE: auth: none was removed in v2026.1.29. Token or password auth is now mandatory.
+   The config above uses token auth (recommended).
+
 6. Verify binding: ss -tlnp | grep 18789
    Must show 127.0.0.1:18789, NOT 0.0.0.0. Show me the output.
 
@@ -171,6 +191,7 @@ Spawn a REVIEW AGENT to verify:
 - ~/.openclaw/openclaw.json exists with gateway.bind = "127.0.0.1", port = 18789, auth token present
 - `ss -tlnp | grep 18789` shows 127.0.0.1:18789 (not 0.0.0.0)
 - openclaw daemon is running (systemctl status or process check)
+- openclaw --version shows v2026.1.29 or later
 Show the review results. Fix any failures before proceeding.
 
 ON ERROR: This is a failure-prone task. If any command fails (install script, onboard wizard, gateway binding), spawn a RESEARCH AGENT with the failed command and error output. Present findings and ask before applying fixes.
@@ -257,6 +278,11 @@ ON ERROR: This is a failure-prone task. If skill installation fails or credentia
 ═══════════════════════════════════════════════════════════
 TASK 4: Create Core Workspace Files (SOUL.md, IDENTITY.md)
 ═══════════════════════════════════════════════════════════
+
+NOTE — Bootstrap auto-generation: On first run, OpenClaw seeds default workspace files
+(AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md, USER.md, HEARTBEAT.md) and runs a Q&A via
+BOOTSTRAP.md. The custom files we create below OVERRIDE these defaults. If you see existing
+workspace files after onboarding, that's expected — our files replace them entirely.
 
 Phase 3 — Workspace files (first batch):
 
@@ -626,6 +652,9 @@ Phase 3b (3.8) — This is the COMPLETE openclaw.json. It REPLACES any earlier p
       }
     }
   },
+  "mcp": {
+    "servers": {}
+  },
   "skills": {
     "load": {
       "watch": true,
@@ -647,6 +676,18 @@ chmod 600 ~/.openclaw/openclaw.json
 Verify binding is still correct: ss -tlnp | grep 18789
 Show me the file to confirm all placeholders were substituted correctly.
 
+NOTE — Config hot-reload: The Gateway watches openclaw.json for changes. Most updates
+apply live without restart (channels, tool policies, model selection, MCP servers, skills).
+Exceptions requiring restart: gateway.bind, gateway.port, sandbox.docker.image.
+
+NOTE — MCP servers: The empty mcp.servers block enables MCP (Model Context Protocol)
+support. MCP expands the agent's tool access to 1000+ community servers. Add server
+entries as needed; leave empty for initial setup. Each server added increases tool surface — audit before adding.
+
+NOTE — Claude API key: OpenClaw uses Anthropic API keys (sk-ant-xxxxx from
+console.anthropic.com), not OAuth tokens from claude.ai subscriptions. Pro/Max/Team
+subscriptions cannot be used with third-party tools.
+
 --- VERIFICATION CHECKPOINT: TASK 6 ---
 Spawn a REVIEW AGENT to verify:
 - ~/.openclaw/openclaw.json is valid JSON
@@ -658,6 +699,7 @@ Spawn a REVIEW AGENT to verify:
 - sandbox.workspaceAccess = "ro"
 - Docker image = "openclaw-sandbox:bookworm-slim"
 - File permissions are 600
+- mcp.servers key exists (empty object is correct for initial setup)
 Show the review results. Fix any failures before proceeding.
 
 ═══════════════════════════════════════════════════════════
@@ -676,6 +718,10 @@ Phase 3.9 — The sandbox config in openclaw.json references a Docker image. Bui
 3. Verify: docker images | grep openclaw-sandbox
    Must show openclaw-sandbox:bookworm-slim. Show me the output.
 
+4. Verify sandbox configuration:
+   openclaw sandbox explain
+   Should show: non-main sessions sandboxed, workspace read-only, resource limits active.
+
 If scripts/sandbox-setup.sh doesn't exist, tell me — the OpenClaw version may handle this differently.
 
 --- VERIFICATION CHECKPOINT: TASK 7 ---
@@ -683,9 +729,10 @@ Spawn a REVIEW AGENT to verify:
 - Docker is installed (docker --version succeeds)
 - clawuser is in the docker group (groups clawuser)
 - openclaw-sandbox:bookworm-slim image exists (docker images | grep openclaw-sandbox)
+- openclaw sandbox explain shows correct sandbox policy (non-main sandboxed, workspace ro)
 Show the review results. Fix any failures before proceeding.
 
-ON ERROR: This is a failure-prone task. If Docker install fails, sandbox-setup.sh is missing, or image build errors occur, spawn a RESEARCH AGENT with the error. Present findings and ask before applying fixes.
+ON ERROR: This is a failure-prone task. If Docker install fails, sandbox-setup.sh is missing, or image build errors occur, openclaw sandbox explain returns unexpected policy, spawn a RESEARCH AGENT with the error. Present findings and ask before applying fixes.
 
 ═══════════════════════════════════════════════════════════
 TASK 8: Lock Down Permissions & Create Exec Approvals
@@ -721,6 +768,13 @@ Phase 3.11 — Create ~/.openclaw/exec-approvals.json with this EXACT content:
 
 chmod 600 ~/.openclaw/exec-approvals.json
 
+Phase 3.10 addendum — Secrets management:
+Run the secrets CLI to audit and harden credentials:
+   openclaw secrets audit       — scan for exposed secrets
+   openclaw secrets configure   — set up secret storage policies
+   openclaw secrets apply       — enforce configured policies
+   openclaw secrets reload      — refresh secrets without restart
+
 Show me permissions on all protected files:
 ls -la ~/.openclaw/openclaw.json ~/.openclaw/exec-approvals.json ~/.openclaw/credentials/
 
@@ -732,6 +786,7 @@ Spawn a REVIEW AGENT to verify:
 - ~/.openclaw/exec-approvals.json exists with correct content and permissions 600
   - defaults.security = "deny", agents.main.security = "deny"
   - autoAllowSkills = false in both sections
+- openclaw secrets audit runs without finding exposed secrets
 Show the review results. Fix any failures before proceeding.
 
 ═══════════════════════════════════════════════════════════
@@ -1345,39 +1400,43 @@ AUTOMATED TESTS (run these):
 11. claude doctor
 12. openclaw cron list → must show all 4 jobs
 13. openclaw skills list → must show all 8 skills (7 custom + google-sheets)
-14. grep -r "sk-" ~/.openclaw/workspace/ → must find NOTHING
-15. grep -A 5 '"allowFrom"' ~/.openclaw/openclaw.json → must show my phone + telegram ID
-16. grep '"groupPolicy"' ~/.openclaw/openclaw.json → WhatsApp: "open", Telegram: "disabled"
-17. grep '"dmScope"' ~/.openclaw/openclaw.json → must show "per-channel-peer"
-18. grep '"workspaceAccess"' ~/.openclaw/openclaw.json → must show "ro"
-19. grep -A 2 '"elevated"' ~/.openclaw/openclaw.json → must show "enabled": false
-20. openclaw security audit --deep → run full security audit (checks for exposed keys, misconfigured permissions, vulnerabilities)
+14. openclaw --version → must show v2026.1.29 or later
+15. openclaw secrets audit → must report no exposed secrets
+16. openclaw status → must show Gateway running, bound to 127.0.0.1:18789
+17. openclaw sandbox explain → must show non-main sandboxed, workspace read-only
+18. grep -r "sk-" ~/.openclaw/workspace/ → must find NOTHING
+19. grep -A 5 '"allowFrom"' ~/.openclaw/openclaw.json → must show my phone + telegram ID
+20. grep '"groupPolicy"' ~/.openclaw/openclaw.json → WhatsApp: "open", Telegram: "disabled"
+21. grep '"dmScope"' ~/.openclaw/openclaw.json → must show "per-channel-peer"
+22. grep '"workspaceAccess"' ~/.openclaw/openclaw.json → must show "ro"
+23. grep -A 2 '"elevated"' ~/.openclaw/openclaw.json → must show "enabled": false
+24. openclaw security audit --deep → run full security audit (checks for exposed keys, misconfigured permissions, vulnerabilities)
 
 GOOGLE SHEETS TESTS (will trigger OAuth flow on first run):
 🛑 HUMAN GATE: "The first gsheet command will open an OAuth browser flow. Complete it to grant Sheets-only access."
-21. gsheet read [ORDERS_SHEET_ID] --range "Sheet1!A1:G1"
-22. gsheet read [INVENTORY_SHEET_ID] --range "Sheet1!A1:D1"
-23. gsheet read [CUSTOMERS_SHEET_ID] --range "Sheet1!A1:F1"
-24. gsheet append [ORDERS_SHEET_ID] --values "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW"
+25. gsheet read [ORDERS_SHEET_ID] --range "Sheet1!A1:G1"
+26. gsheet read [INVENTORY_SHEET_ID] --range "Sheet1!A1:D1"
+27. gsheet read [CUSTOMERS_SHEET_ID] --range "Sheet1!A1:F1"
+28. gsheet append [ORDERS_SHEET_ID] --values "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW"
 
 BACKUP TEST:
 🛑 HUMAN GATE: Only run if deploy key is added to GitHub.
-25. bash ~/scripts/daily_backup.sh
+29. bash ~/scripts/daily_backup.sh
 
 CLAUDE CODE PERMISSION TESTS:
-26. cd ~/.openclaw/workspace && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
+30. cd ~/.openclaw/workspace && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
     → should FAIL silently
-27. claude --permission-mode dontAsk "Try to run: sudo apt update"
+31. claude --permission-mode dontAsk "Try to run: sudo apt update"
     → should FAIL silently
 
 Show me a summary table of all test results.
 
 --- VERIFICATION CHECKPOINT: TASK 14 ---
 Spawn a REVIEW AGENT to verify:
-- All 27 test results collected
+- All 31 test results collected
 - Summarize: total PASS, total FAIL
 - For any FAILs, identify the root cause and whether it's a blocker or cosmetic
-- Confirm security-critical tests passed: tests 2, 4, 5, 6, 8, 9, 14, 18, 19, 20
+- Confirm security-critical tests passed: tests 2, 4, 5, 6, 8, 9, 14, 18, 22, 23, 24
 Show the review results. Fix any critical failures before proceeding.
 
 ON ERROR: This is a failure-prone task. If any test reveals a security misconfiguration or unexpected state, spawn a RESEARCH AGENT for diagnosis. Present findings and ask before applying fixes.
@@ -1409,7 +1468,7 @@ H. Send a test order: "@bot I'd like to order 2x [item from your inventory]"
    → Verify: row appears in Orders sheet, customer in Customers sheet.
 
 POST-TEST CLEANUP:
-- Remove the TEST row from Orders sheet (added in test #23)
+- Remove the TEST row from Orders sheet (added in test #28)
 - Send /status via Telegram to check agent context and model
 
 Print these instructions clearly so I can follow them step by step.
@@ -1468,7 +1527,7 @@ Begin with Task 1. Ask me for any missing business values before creating files.
 | 11 | Backup script + SSH deploy key + git init | 5.1–5.2 | Execution + Review + Research | Add deploy key to GitHub | Yes |
 | 12 | CRON jobs + SYSTEM_LOG.md + memory dir | 5.3–5.4 | Execution + Review | None | No |
 | 13 | Initial git push | 5.2 | Execution + Review + Research | Deploy key must be added first | Yes |
-| 14 | Automated verification suite (27 tests) | 6 | Execution + Review + Research | OAuth flow on first gsheet command | Yes |
+| 14 | Automated verification suite (31 tests) | 6 | Execution + Review + Research | OAuth flow on first gsheet command | Yes |
 | 15 | Manual security tests (instructions) | 6 | Execution only | All manual (Telegram + WhatsApp) | No |
 
 **Summary:** All 15 tasks use the Review Agent for post-task verification. 7 failure-prone tasks (1, 2, 3, 7, 11, 13, 14) also have Research Agent escalation. 10 human gates across the setup. Final comprehensive review at completion.

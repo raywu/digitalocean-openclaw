@@ -18,7 +18,13 @@ The Gateway is the single entry/exit point for all messages. It handles channel 
 
 **For specialization:** The Gateway's channel bindings determine *where* the agent operates. You can route specific WhatsApp groups, Telegram chats, or Discord channels to specific agents — effectively scoping a specialist agent to only the conversations it should participate in.
 
-**For security:** The Gateway is the trust boundary. If a caller passes Gateway auth, they are treated as a trusted operator. DM pairing, channel allowlists, and mention gating (`requireMention: true` for groups) control who can interact with the agent. Without these, anyone who messages the bot can trigger actions.
+**For security:** The Gateway is the trust boundary. If a caller passes Gateway auth, they are treated as a trusted operator.
+
+> **v2026.1.29 update:** The `auth: none` mode has been removed. Token or password auth is now mandatory — the Gateway refuses to start without it. This eliminates a common misconfiguration where operators deployed without auth.
+
+DM pairing, channel allowlists, and mention gating (`requireMention: true` for groups) control who can interact with the agent. Without these, anyone who messages the bot can trigger actions.
+
+> **CVE-2026-25253 (CVSS 8.8):** Versions before v2026.1.29 are vulnerable to a 1-Click RCE via auth token exfiltration through WebSocket. Always verify `openclaw --version` shows v2026.1.29+. The DigitalOcean 1-Click Marketplace image ships v2026.1.24-1, which is vulnerable — run `openclaw upgrade` immediately after deployment.
 
 ---
 
@@ -124,6 +130,8 @@ In multi-agent configurations, each agent has its own workspace — and therefor
 
 This scoping is both a specialization mechanism and a security boundary: an agent can only use skills it can see.
 
+> **MCP native support:** OpenClaw now supports MCP (Model Context Protocol) servers natively via `mcp.servers` in `openclaw.json`. This expands tool access to 1000+ community servers. Each MCP server added increases the agent's tool surface — audit servers before adding them, just as you would audit community skills.
+
 ---
 
 ### 6. Heartbeat (Proactive Scheduling)
@@ -188,6 +196,9 @@ The same framework applies to specialization:
 | **TOOLS.md** *(soft/reasoning)* | Prose instructions on tool restrictions | Declares available capabilities for the LLM |
 | **`openclaw.json` tool policy** *(hard/execution)* | Gateway-enforced deny-list, `fs.workspaceOnly` | Declares which tools the Gateway actually provides |
 | **Sandbox (Docker)** *(hard/execution)* | OS-level containment, blast radius reduction | Resource isolation per agent |
+
+> **Docker sandbox config:** The verified sandbox config structure uses `agents.defaults.sandbox` with `mode`, `scope`, `workspaceAccess`, and `docker` sub-keys (image, readOnlyRoot, memory, pidsLimit). Use `openclaw sandbox explain` to verify the resolved sandbox policy.
+
 | **Compaction** *(hard/execution)* | Prevents session crashes from context overflow | Enables long-running specialist workflows |
 | **Skills** | Scoped to workspace; treat as trusted code | Domain-specific playbooks and automations |
 | **Memory** | Never store secrets; monitor for poisoning | Compound knowledge that makes the agent better over time |

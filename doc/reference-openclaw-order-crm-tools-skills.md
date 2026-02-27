@@ -20,11 +20,11 @@ OpenClaw isn't a CRM. It's an agent that *operates* on your data wherever it's s
 | **Odoo** | Full ERP (orders + invoicing + inventory + accounting) | `odoo-openclaw-skill` — read-only RPC queries, reports, WhatsApp cards |
 | **Dedicated CRM (HubSpot, Salesforce, etc.)** | Sales teams, pipeline management | Via Composio MCP or Zapier MCP bridge |
 
-**The setup guide currently uses CSV in workspace.** This is the simplest and most appropriate starting point for a solo or small operation — no external dependencies, no API costs, fully version-controlled in git. The recommendations below are organized in tiers: what to start with (CSV), what to graduate to (structured data store), and what to add as the operation grows.
+**The setup guide uses Google Sheets as its primary data store** (migrated from CSV in v2 of the guide). Google Sheets provides shared visibility, concurrent access, and API-accessible structured data while remaining free. The recommendations below are organized in tiers: what to start with (Google Sheets — the guide's current approach), what alternatives exist, and what to add as the operation grows.
 
 ---
 
-## Tier 1: Starting Configuration (CSV-Based, Day One)
+## Tier 1: Starting Configuration (Google Sheets, Day One)
 
 These are the custom skills and built-in tools already covered in the setup guide. No community skills needed — just the agent's native `fs` tools (read, write, edit) and your custom skill logic.
 
@@ -32,8 +32,8 @@ These are the custom skills and built-in tools already covered in the setup guid
 
 | Skill | Trigger | Data Store |
 |-------|---------|------------|
-| `order-processing` | Customer sends items/quantities via WhatsApp | Appends to `customers_orders.csv` |
-| `weekly-report` | CRON Sunday 8 AM, or operator request | Reads `customers_orders.csv`, sends Telegram summary |
+| `order-processing` | Customer sends items/quantities via WhatsApp | Appends to Orders Google Sheet |
+| `weekly-report` | CRON Sunday 8 AM, or operator request | Reads Orders Google Sheet, sends Telegram summary |
 | `backup` | CRON nightly 11:59 PM | Git push workspace to private repo |
 
 ### Custom Skills to Add (Not Yet in Setup Guide)
@@ -57,7 +57,7 @@ Operator or agent needs customer history — repeat customer placing a new order
 customer inquiry about past orders, or preparing a follow-up.
 
 ## Workflow
-1. Search customers_orders.csv for rows matching the customer name (fuzzy match).
+1. Search Customers Google Sheet for rows matching the customer name (fuzzy match).
 2. Aggregate: total orders, total items, most recent order date, most frequently
    ordered items, total spend (if price column exists).
 3. Return structured summary.
@@ -92,10 +92,10 @@ metadata:
 - Operator asks "what's running low?" or "inventory status"
 
 ## Workflow
-1. Read inventory.md for current stock levels.
-2. Cross-reference with recent orders in customers_orders.csv to calculate
+1. Read Inventory Google Sheet for current stock levels.
+2. Cross-reference with recent orders in Orders Google Sheet to calculate
    items sold since last restock.
-3. Flag items below restock threshold (defined in inventory.md header).
+3. Flag items below restock threshold.
 4. If triggered by heartbeat: only alert if low-stock items found.
 5. If triggered by operator: always return full inventory summary.
 
@@ -106,7 +106,7 @@ metadata:
 - Last updated: [date from inventory.md]
 
 ## Edge Cases
-- inventory.md missing → Alert operator immediately.
+- Inventory sheet inaccessible → Alert operator immediately.
 - Item in order not in inventory → Flag as "unknown item" during order processing.
 ```
 
@@ -126,7 +126,7 @@ metadata:
 Operator requests "post the order form" or scheduled posting (e.g., weekly).
 
 ## Workflow
-1. Read inventory.md for available items, prices, and descriptions.
+1. Read Inventory Google Sheet for available items, prices, and descriptions.
 2. Format as a clean WhatsApp message with emoji, item names, prices.
 3. **REQUIRE OPERATOR CONFIRMATION before posting to group.**
 4. Post to designated WhatsApp group.
@@ -163,7 +163,7 @@ metadata:
 CRON at 9:00 PM daily, or when operator asks "how was today?"
 
 ## Workflow
-1. Read customers_orders.csv, filter to today's date.
+1. Read Orders Google Sheet, filter to today's date.
 2. Calculate: order count, unique customers, items sold, top item.
 3. Compare to yesterday and same day last week (if data exists).
 4. Send concise summary to operator Telegram.
@@ -177,7 +177,7 @@ CRON at 9:00 PM daily, or when operator asks "how was today?"
 
 ## Edge Cases
 - No orders today → "📈 Quiet day — no orders recorded."
-- CSV error → Alert instead of summary.
+- Sheets API error → Alert instead of summary.
 ```
 
 ### Built-In Tools to Enable
@@ -325,15 +325,16 @@ This is the escape hatch, but it adds latency and a dependency on Zapier's infra
 ### Solo Operator, Just Starting
 ```
 Custom Skills:
-  ✅ order-processing (CSV)
-  ✅ customer-lookup (CSV)
-  ✅ inventory-check (inventory.md)
+  ✅ order-processing (Google Sheets)
+  ✅ customer-lookup (Google Sheets)
+  ✅ inventory-check (Google Sheets)
   ✅ order-form (WhatsApp posting)
   ✅ daily-summary (Telegram)
   ✅ weekly-report (Telegram)
   ✅ backup (git)
 
 Community Skills:
+  ✅ google-sheets (gsheet CLI)
   ✅ brave_search (market research)
   ❌ Everything else — keep it minimal
 
@@ -347,16 +348,16 @@ Tools (openclaw.json):
 ```
 Everything from Solo, plus:
 
-Data Store Migration:
-  → Google Sheets OR Airtable (shared visibility)
+Data Store:
+  Google Sheets already in place (from setup guide)
+  → Consider Airtable for more structured views/automations
 
 Community Skills:
-  ✅ google-sheets OR airtable-automation
+  ✅ google-sheets (already installed)
+  ✅ airtable-automation (if migrating to Airtable)
   ✅ stripe (payment links, if accepting online payments)
 
 Custom Skills:
-  + Rewrite order-processing to write to Sheets/Airtable
-  + Keep CSV as local backup/cache
   + Add customer-follow-up skill (re-engagement for dormant customers)
 ```
 
