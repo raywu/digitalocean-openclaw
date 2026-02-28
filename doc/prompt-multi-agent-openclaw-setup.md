@@ -440,7 +440,8 @@ Phase 3.3–3.6 — Create these four files with EXACT content:
 
 ## Tool Access
 - **Enabled:** brave_search (market research), github (backup repo only),
-  gsheet (Google Sheets — Orders, Inventory, Customers sheets only)
+  gsheet (Google Sheets — Orders, Inventory, Customers sheets only),
+  memory_search, memory_get
 - **Disabled:** exec (cannot run binaries on host), email_*, browser_*, ssh_*,
   gateway_config, gdrive_*, gmail_*
 - **Requires Confirmation:** Any row deletion or status change to "Cancelled",
@@ -481,6 +482,15 @@ Phase 3.3–3.6 — Create these four files with EXACT content:
   - `gsheet list` — list accessible spreadsheets
   Always reference sheets by their designated IDs from SOUL.md.
   NEVER use the browser to access Google Sheets — always use the gsheet CLI.
+
+- **memory_search**: Semantic search across MEMORY.md and memory/*.md.
+  Auto-approved (no confirmation needed). Returns ranked snippet matches.
+  - `memory_search { query: "customer preference" }`
+  - Optional: `maxResults` (default varies), `minScore` (relevance threshold)
+- **memory_get**: Read specific lines from a memory file. Use after
+  memory_search identifies a relevant file.
+  - `memory_get { path: "memory/YYYY-MM-DD.md" }`
+  - Optional: `from` (start line), `lines` (count)
 
 ## Restricted — Do Not Use
 - Exec tool: DISABLED. Do not run shell commands on the host via exec.
@@ -543,7 +553,10 @@ every: "1h"
 2. Verify ~/scripts/daily_backup.sh exists and is executable.
 3. Check if last git push to backup repo was within the last 26 hours.
 4. Verify inventory sheet has no items with blank "Available" status.
-5. If any check fails, send an alert to operator Telegram:
+5. Run `openclaw memory status` — verify indexed file count > 0.
+   If memory index is empty, alert:
+   "Heartbeat Alert: Memory index empty — run `openclaw memory index` to rebuild."
+6. If any check fails, send an alert to operator Telegram:
    "⚠️ Heartbeat Alert: [describe failure]"
 
 ## Do NOT
@@ -850,6 +863,15 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - SYSTEM_LOG.md — Operational audit trail
 - skills/ — Custom SKILL.md files for order-processing, reports, etc.
 - memory/ — Agent memory files (daily + long-term)
+- MEMORY.md — Curated long-term facts, loaded every session, indexed for search
+
+## Memory System
+- **MEMORY.md** — Curated long-term facts (sheet IDs, preferences). Loaded every session.
+- **memory/YYYY-MM-DD.md** — Daily running logs. All indexed for search.
+- **Search:** SQLite hybrid (vector + BM25 full-text). Auto-indexes on change.
+- **Agent tools:** `memory_search` (semantic recall), `memory_get` (targeted reads)
+- **Sandbox:** `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow`
+- **Index:** `openclaw memory index` to rebuild. `openclaw memory status` to check health.
 
 ## Rules for Editing
 - NEVER modify SOUL.md security boundaries without careful review

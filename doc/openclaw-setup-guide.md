@@ -451,7 +451,8 @@ your domain.
 
 ## Tool Access
 - **Enabled:** brave_search (market research), github (backup repo only),
-  gog (Google Sheets — Orders, Inventory, Customers sheets only)
+  gog (Google Sheets — Orders, Inventory, Customers sheets only),
+  memory_search, memory_get
 - **Exec:** Available, restricted by allowlist (`/home/clawuser/.local/bin/gog`, `/home/clawuser/scripts/safe-git.sh`, `/home/clawuser/scripts/daily_backup.sh`, and `/home/clawuser/scripts/hourly_checkpoint.sh` only)
 - **Disabled:** email_*, browser_*, ssh_*, gateway_config, gdrive_*, gmail_*
 - **Requires Confirmation:** Any row deletion or status change to "Cancelled",
@@ -496,6 +497,15 @@ your domain.
   - `gog sheets update <id> "Sheet1!A5" "Updated"` — update a cell
   - `gog sheets list` — list accessible spreadsheets
   Always reference sheets by their designated IDs from SOUL.md.
+
+- **memory_search**: Semantic search across MEMORY.md and memory/*.md.
+  Auto-approved (no confirmation needed). Returns ranked snippet matches.
+  - `memory_search { query: "customer preference" }`
+  - Optional: `maxResults` (default varies), `minScore` (relevance threshold)
+- **memory_get**: Read specific lines from a memory file. Use after
+  memory_search identifies a relevant file.
+  - `memory_get { path: "memory/YYYY-MM-DD.md" }`
+  - Optional: `from` (start line), `lines` (count)
 
 ## Restricted — Do Not Use
 - Claude Code: DISABLED. Do not access, spawn, or reference Claude Code.
@@ -556,7 +566,10 @@ every: "1h"
 2. Verify ~/scripts/daily_backup.sh exists and is executable.
 3. Check if last git push to backup repo was within the last 26 hours.
 4. Verify inventory sheet has no items with blank "Available" status.
-5. If any check fails, send an alert to operator Telegram:
+5. Run `openclaw memory status` — verify indexed file count > 0.
+   If memory index is empty, alert:
+   "Heartbeat Alert: Memory index empty — run `openclaw memory index` to rebuild."
+6. If any check fails, send an alert to operator Telegram:
    "⚠️ Heartbeat Alert: [describe failure]"
 
 ## Do NOT
@@ -658,7 +671,8 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
         "allow": [
           "exec", "read", "write", "edit", "apply_patch",
           "image", "sessions_list", "sessions_history",
-          "sessions_send", "subagents", "session_status"
+          "sessions_send", "subagents", "session_status",
+          "memory_search", "memory_get"
         ],
         "deny": ["process", "cron", "gateway", "canvas", "nodes", "sessions_spawn", "browser"]
       }
@@ -767,7 +781,7 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
 - **`tools.deny`** — Gateway-level deny-list. `process` replaces the old `exec` entry (process management is denied). `browser` is denied as a single entry (covers all browser tools). All email/gmail/SSH/gateway tools are denied. Note: `exec` is NOT in this list — exec is enabled but scoped via `exec-approvals.json`.
 - **`tools.exec: { "host": "gateway" }`** — Enables exec with gateway as the execution host. Combined with `exec-approvals.json` allowlist, only specific binaries (gog, safe-git.sh, daily_backup.sh, hourly_checkpoint.sh) can be executed.
 - **`tools.elevated.enabled: false`** — Explicitly disables elevated mode. Without this, a paired sender could potentially trigger host-level tool execution via `/elevated` commands. With it disabled, no sender can bypass the sandbox.
-- **`tools.sandbox.tools.allow`** — Explicit allowlist of tools available inside the sandbox. Only basic file operations, exec, sessions, and subagents are permitted.
+- **`tools.sandbox.tools.allow`** — Explicit allowlist of tools available inside the sandbox. Includes file operations, exec, sessions, subagents, and memory tools (`memory_search`, `memory_get`).
 - **`tools.sandbox.tools.deny`** — Tools denied inside the Docker sandbox. `cron` prevents group sessions from scheduling persistent tasks. `sessions_spawn` prevents spawning sub-agents. `browser` prevents web access from sandbox.
 - **`tools.fs.workspaceOnly: true`** — Restricts all file read/write/edit operations to the workspace directory. The agent cannot access system files, SSH keys, or other users' data.
 - **`sandbox.mode: "non-main"`** — Runs group chat and thread sessions inside isolated Docker containers. Main DM sessions (your direct operator channel) run on host for full tool access.
@@ -970,6 +984,15 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - SYSTEM_LOG.md — Operational audit trail
 - skills/ — Custom SKILL.md files for order-processing, reports, etc.
 - memory/ — Agent memory files (daily + long-term)
+- MEMORY.md — Curated long-term facts, loaded every session, indexed for search
+
+## Memory System
+- **MEMORY.md** — Curated long-term facts (sheet IDs, preferences). Loaded every session.
+- **memory/YYYY-MM-DD.md** — Daily running logs. All indexed for search.
+- **Search:** SQLite hybrid (vector + BM25 full-text). Auto-indexes on change.
+- **Agent tools:** `memory_search` (semantic recall), `memory_get` (targeted reads)
+- **Sandbox:** `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow`
+- **Index:** `openclaw memory index` to rebuild. `openclaw memory status` to check health.
 
 ## Rules for Editing
 - NEVER modify SOUL.md security boundaries without careful review

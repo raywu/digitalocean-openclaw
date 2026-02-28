@@ -59,6 +59,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
   - Auto-indexed via Gemini `gemini-embedding-001` embeddings + BM25 full-text
   - Agent writes daily observations and updates MEMORY.md when durable facts change
   - Boot and heartbeat checks verify memory index is non-empty
+  - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
 
 ## Git
 
