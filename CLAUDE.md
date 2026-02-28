@@ -40,7 +40,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 `pending` → `cancelled` (auto-cancel after Wed 2 PM PT, or manual)
 
 - New orders are always `pending`, never `confirmed`
-- Venmo URL format: `venmo.com/u/{handle}` (strip `@` from handle)
+- Venmo URL format: `venmo.com/{handle}` — do NOT use `venmo.com/u/{handle}` (strip `@` from handle)
 
 ## Key Config Patterns
 
@@ -74,8 +74,8 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 | `daily-backup` | 23:59 UTC daily | main | systemEvent — runs `daily_backup.sh` |
 | `hourly-checkpoint` | :00 every hour (+5m stagger) | main | systemEvent — runs `hourly_checkpoint.sh` |
 | `order-checkout` | Tue 22:15 PT | main | systemEvent — batch checkout skill |
-| `payment-reminder` | Wed 10:00 PT | main | systemEvent — DM unpaid customers |
-| `auto-cancel` | Wed 14:00 PT | main | systemEvent — cancel unpaid orders |
+| `payment-reminder` | Wed 10:00 PT | isolated | agentTurn — DM unpaid customers |
+| `auto-cancel` | Wed 14:00 PT | isolated | agentTurn — cancel unpaid orders |
 | `daily-summary` | 21:00 UTC daily | isolated | agentTurn — Telegram report |
 | `weekly-report` | Sun 08:00 UTC | isolated | agentTurn — Telegram report |
 | `monday-config-reminder` | Mon 21:00 PT | isolated | agentTurn — Telegram reminder |
