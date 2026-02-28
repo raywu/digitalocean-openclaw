@@ -1266,6 +1266,15 @@ Phase 5.3 — CRON jobs (use OpenClaw's built-in CRON, not system crontab):
 3. openclaw cron add --name "weekly-report" --schedule "0 8 * * 0" --command "Read the Orders Google Sheet and send a Weekly Performance Report to my Telegram"
 4. openclaw cron add --name "daily-summary" --schedule "0 21 * * *" --command "Read today's orders from the Orders Google Sheet and send a Daily Summary to my Telegram"
 
+IMPORTANT — CRON Payload Cache Sync:
+CRON payloads are static — captured at registration time. Editing a skill does NOT update the CRON payload.
+When editing a skill with a corresponding CRON job:
+1. Edit the skill file
+2. Check if the CRON payload conflicts with the updated skill
+3. If so: openclaw cron edit <id> --message "<updated text>" (agentTurn) or --system-event "<updated text>" (systemEvent)
+4. Prefer minimal trigger prompts ("Run the X skill") over inline instructions to minimize drift
+For agentTurn timeouts: use --timeout-seconds <n> (not --timeout). Default 30s; batch jobs need 300s.
+
 Phase 5.4 — Create SYSTEM_LOG.md:
 5. Create ~/.openclaw/workspace/SYSTEM_LOG.md:
 

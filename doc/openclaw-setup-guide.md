@@ -1459,6 +1459,14 @@ openclaw cron add --name "weekly-report" --schedule "0 8 * * 0" --command "Read 
 openclaw cron add --name "daily-summary" --schedule "0 21 * * *" --command "Read today's orders from the Orders Google Sheet and send a Daily Summary to my Telegram"
 ```
 
+> **CRON Payload Cache Sync** — CRON job payloads are static: the `--message` or `--command` text is captured at registration time. Editing a skill file or script does NOT update the CRON payload. When you edit a skill that has a corresponding CRON job with inline instructions:
+> 1. Edit the skill file
+> 2. Check if the CRON payload contains text that now conflicts (`openclaw cron list` to find the job, inspect the payload)
+> 3. If so: `openclaw cron edit <id> --message "<updated text>"` (agentTurn) or `--system-event "<updated text>"` (systemEvent)
+> 4. Prefer minimal trigger prompts ("Run the X skill") over detailed inline instructions — this minimizes future drift
+>
+> For timeouts on `agentTurn` jobs, use `--timeout-seconds <n>` (not `--timeout`). Default is 30s; batch jobs with Google Sheets reads + DMs need 300s.
+
 **5.4 — Initialize Business Data**
 
 Your business data now lives in Google Sheets (created in Phase 2.5). Initialize the local workspace files that the agent still needs:
