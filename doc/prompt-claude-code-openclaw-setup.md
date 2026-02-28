@@ -427,6 +427,12 @@ Phase 3.3–3.6 — Create these four files with EXACT content:
 - Exec is restricted by the approval policy. Only `gog` and `git` commands
   are permitted. All other exec attempts are denied.
 
+## Messaging Targets
+- **Telegram**: Always use numeric chat ID `1234567890` for operator messages.
+  Never use phone numbers, @usernames, or aliases like `@operator`.
+- **WhatsApp DMs**: Use E.164 phone numbers (e.g., `+11234567890`).
+- **WhatsApp group**: Use group JID `120363000000000000@g.us`.
+
 ## Session Management
 - Monitor your context usage. If a session becomes long, use /compact to
   summarize history before hitting limits.
