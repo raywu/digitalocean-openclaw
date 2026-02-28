@@ -48,10 +48,13 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 - **CRON**: uses `--cron` and `--message` flags (not `--schedule`/`--command`)
 - **CRON exec caveat**: isolated sessions hit approval gates; use `session=main` for CRON jobs needing exec
 - **CRON version control**: `jobs.json` is snapshotted into `workspace/cron/` by hourly checkpoint and tracked in git
+- **Models**: primary `anthropic/claude-sonnet-4-6`, fallback `google/gemini-2.5-pro`; roster includes `gemini-3-pro-preview` and `claude-sonnet-4-5`
+- **Channels**: WhatsApp (`dmPolicy: open`, group `120363404090082823@g.us` with `requireMention`) + Telegram (`dmPolicy: pairing`, operator `5906288273`)
+- **Sandbox**: `non-main` mode, `openclaw-sandbox:bookworm-slim`, 512m memory, 128 PIDs, read-only root, workspace read-only in sandbox
 
 ## Key Concepts
 
-- **Workspace files** (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md) define agent identity and behavior — loaded into system prompt each message
+- **Workspace files** (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md, CLAUDE.md, MEMORY.md, SYSTEM_LOG.md) define agent identity, behavior, and state — loaded into system prompt each message
 - **Dual enforcement model**: soft (LLM reasoning via workspace markdown) + hard (Gateway tool policies, sandbox, OS-level containment)
 - **Skills** are `SKILL.md` files with YAML frontmatter in `~/.openclaw/workspace/skills/<name>/`
 - **Memory** uses daily markdown files + SQLite hybrid search (vector + BM25)
@@ -60,6 +63,22 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
   - Agent writes daily observations and updates MEMORY.md when durable facts change
   - Boot and heartbeat checks verify memory index is non-empty
   - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
+
+## CRON Jobs (8 active)
+
+| Job | Schedule | Session | Type |
+|-----|----------|---------|------|
+| `daily-backup` | 23:59 UTC daily | main | systemEvent — runs `daily_backup.sh` |
+| `hourly-checkpoint` | :00 every hour (+5m stagger) | main | systemEvent — runs `hourly_checkpoint.sh` |
+| `order-checkout` | Tue 22:15 PT | main | systemEvent — batch checkout skill |
+| `daily-summary` | 21:00 UTC daily | isolated | agentTurn — Telegram report |
+| `weekly-report` | Sun 08:00 UTC | isolated | agentTurn — Telegram report |
+| `monday-config-reminder` | Mon 21:00 PT | isolated | agentTurn — Telegram reminder |
+| `tuesday-form-blast` | Tue 09:00 PT | isolated | agentTurn — WhatsApp group blast |
+| `tuesday-reminder` | Tue 16:00 PT | isolated | agentTurn — WhatsApp group reminder |
+
+- `systemEvent` jobs target `session=main` (need exec access)
+- `agentTurn` jobs use `isolated` sessions with delivery announcements
 
 ## Git
 
