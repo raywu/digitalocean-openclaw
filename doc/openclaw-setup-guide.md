@@ -1042,10 +1042,10 @@ Customer sends a message containing item names, quantities, or asks to place an 
    - Verify "Available" column is "Yes".
 3. Look up customer: `gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"`
    - Search by name or phone/handle from the message.
-   - If new customer, append to Customers sheet after order is confirmed.
+   - If new customer, append to Customers sheet after order is placed.
 4. If all items are valid and available:
    a. Append row to Orders sheet:
-      `gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:G" "Name,Item,Quantity,YYYY-MM-DD HH:MM,confirmed,whatsapp,"`
+      `gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:G" "Name,Item,Quantity,YYYY-MM-DD HH:MM,pending,whatsapp,"`
    b. Update Customers sheet: increment Total Orders, update Last Contact date.
    c. Send confirmation to customer via originating WhatsApp channel:
       "✅ Order confirmed: [Quantity]x [Item] for [Name]. Thank you!"
@@ -1183,7 +1183,7 @@ cancellation) or operator asks to update an order status.
 ## Workflow
 1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:G"`
 2. Find the matching order by customer name + item + recent timestamp.
-3. Verify the order Status is "confirmed" (not "shipped" or "completed").
+3. Verify the order Status is "pending" (not "shipped" or "completed").
    - If already shipped/completed → "This order has already been [status]
      and cannot be modified. Please contact [operator] directly."
 4. For modifications:
@@ -1237,7 +1237,7 @@ Every Sunday at 8:00 AM (triggered by CRON), or when operator requests a report.
 2. Filter to orders from the last 7 days (by Timestamp column).
 3. Exclude rows with Status = "cancelled".
 4. Calculate:
-   - Total confirmed orders
+   - Total orders
    - Unique customers (distinct Name values)
    - Top 5 items by total quantity
    - Daily breakdown (Mon–Sun order counts)
@@ -1297,7 +1297,7 @@ Every day at 9:00 PM (triggered by CRON), or when operator asks for today's summ
 5. Check SYSTEM_LOG.md for any errors or alerts logged today.
 6. Format as a brief Telegram message:
    🌙 Daily Recap — [date]
-   Orders: X confirmed, Y cancelled
+   Orders: X pending, Y paid, Z cancelled
    Top item: [Item] (X units)
    ⚠️ Issues: [any errors or none]
    📦 Out of stock: [items or "all clear"]
