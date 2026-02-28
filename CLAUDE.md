@@ -47,6 +47,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 - **Exec policy**: allowlist mode in `exec-approvals.json` (`security: "allowlist"`, not `"deny"`)
 - **CRON**: uses `--cron` and `--message` flags (not `--schedule`/`--command`)
 - **CRON exec caveat**: isolated sessions hit approval gates; use `session=main` for CRON jobs needing exec
+- **CRON version control**: `jobs.json` is snapshotted into `workspace/cron/` by hourly checkpoint and tracked in git
 
 ## Key Concepts
 
@@ -54,6 +55,10 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 - **Dual enforcement model**: soft (LLM reasoning via workspace markdown) + hard (Gateway tool policies, sandbox, OS-level containment)
 - **Skills** are `SKILL.md` files with YAML frontmatter in `~/.openclaw/workspace/skills/<name>/`
 - **Memory** uses daily markdown files + SQLite hybrid search (vector + BM25)
+  - Activated 2026-02-28. `MEMORY.md` (long-term) + `memory/YYYY-MM-DD.md` (daily logs)
+  - Auto-indexed via Gemini `gemini-embedding-001` embeddings + BM25 full-text
+  - Agent writes daily observations and updates MEMORY.md when durable facts change
+  - Boot and heartbeat checks verify memory index is non-empty
 
 ## Git
 
