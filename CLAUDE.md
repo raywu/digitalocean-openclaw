@@ -19,7 +19,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 
 ## Deployed Skills
 
-8 skills in `~/.openclaw/workspace/skills/`:
+10 skills in `~/.openclaw/workspace/skills/`:
 
 | Skill | Description |
 |-------|-------------|
@@ -30,11 +30,14 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 | `daily-summary` | Daily order stats (pending/paid/cancelled) |
 | `weekly-report` | Weekly aggregate reporting |
 | `weekly-order-blast` | Saturday pickup blast to group chat |
+| `payment-reminder` | Wednesday 10 AM reminder DM for unpaid pending orders |
+| `auto-cancel` | Wednesday 2 PM auto-cancellation of unpaid pending orders |
 | `backup` | Git-based backup to `raywu/asianova-bot` |
 
 ## Order Status Lifecycle
 
 `pending` (at checkout) → `confirmed` (after payment-confirmation verifies screenshot)
+`pending` → `cancelled` (auto-cancel after Wed 2 PM PT, or manual)
 
 - New orders are always `pending`, never `confirmed`
 - Venmo URL format: `venmo.com/u/{handle}` (strip `@` from handle)
@@ -64,13 +67,15 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
   - Boot and heartbeat checks verify memory index is non-empty
   - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
 
-## CRON Jobs (8 active)
+## CRON Jobs (10 active)
 
 | Job | Schedule | Session | Type |
 |-----|----------|---------|------|
 | `daily-backup` | 23:59 UTC daily | main | systemEvent — runs `daily_backup.sh` |
 | `hourly-checkpoint` | :00 every hour (+5m stagger) | main | systemEvent — runs `hourly_checkpoint.sh` |
 | `order-checkout` | Tue 22:15 PT | main | systemEvent — batch checkout skill |
+| `payment-reminder` | Wed 10:00 PT | main | systemEvent — DM unpaid customers |
+| `auto-cancel` | Wed 14:00 PT | main | systemEvent — cancel unpaid orders |
 | `daily-summary` | 21:00 UTC daily | isolated | agentTurn — Telegram report |
 | `weekly-report` | Sun 08:00 UTC | isolated | agentTurn — Telegram report |
 | `monday-config-reminder` | Mon 21:00 PT | isolated | agentTurn — Telegram reminder |
