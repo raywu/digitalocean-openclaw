@@ -243,8 +243,8 @@ Create three Google Sheets (or tabs within one spreadsheet) before the agent sta
 
 | Sheet | Purpose | Columns |
 |-------|---------|---------|
-| **Orders** | All customer orders | Name, Item, Quantity, Timestamp, Status, Channel, Notes |
-| **Inventory** | Available products | Item, Available (Yes/No), Price, Category |
+| **Orders** | All customer orders | Name, Item, Quantity, Timestamp, Status, Channel, Notes, Order ID, Payment Status, Week, Venmo Confirmation ID |
+| **Config** | Business configuration | Key-value pairs: form_url, form_responses_sheet_url, unit_price, venmo_handle, pickup_location |
 | **Customers** | Customer directory | Name, Phone/Handle, First Order Date, Total Orders, Preferences, Last Contact |
 
 Note each spreadsheet's ID from the URL (the long string between `/d/` and `/edit`). You'll reference these IDs in your custom skills (Phase 4) and USER.md (Phase 3).
@@ -268,7 +268,7 @@ Instead of one monolithic prompt, distribute configuration across OpenClaw's pur
 | `[Your Agent Name]` | Pick a name for the agent | IDENTITY.md |
 | `[Your Timezone]` | e.g., `America/New_York` | USER.md |
 | `[ORDERS_SHEET_ID]` | From the Orders Google Sheet URL (between `/d/` and `/edit`) | SOUL.md, AGENTS.md, HEARTBEAT.md, USER.md, all skills |
-| `[INVENTORY_SHEET_ID]` | From the Inventory Google Sheet URL | SOUL.md, AGENTS.md, USER.md, all skills |
+| `[CONFIG_SHEET_ID]` | From the Config Google Sheet URL | USER.md, all skills |
 | `[CUSTOMERS_SHEET_ID]` | From the Customers Google Sheet URL | SOUL.md, AGENTS.md, USER.md, all skills |
 | `[Group Name]` | Your WhatsApp customer-facing group | USER.md |
 | `[BUSINESS_GROUP_JID]` | WhatsApp group JID — run `openclaw logs --follow`, send a message in the group, read the `from` field (format: `31640053449-1633552575@g.us`) | `openclaw.json` channels.whatsapp.groups |
@@ -276,7 +276,7 @@ Instead of one monolithic prompt, distribute configuration across OpenClaw's pur
 | `OWNER_TELEGRAM_USER_ID` | DM your Telegram bot → run `openclaw logs --follow` → read `from.id` (numeric), or DM `@userinfobot` on Telegram | `openclaw.json` channels.telegram.allowFrom |
 | `[org]/[repo-name]` | Your private GitHub backup repo | USER.md, backup script |
 
-> **If using Claude Code:** Give it all these values in a single prompt and let it create all workspace files and skills in one session. Example: `"Create all OpenClaw workspace files using these values: Business = Acme Widgets, Operator = Jane, Agent = WidgetBot, Timezone = America/Chicago, Orders Sheet ID = 1abc..., Inventory Sheet ID = 2def..., Customers Sheet ID = 3ghi..., WhatsApp Group = Acme Orders, Backup Repo = acme-corp/openclaw-backup"`. This ensures consistency across all 13 files.
+> **If using Claude Code:** Give it all these values in a single prompt and let it create all workspace files and skills in one session. Example: `"Create all OpenClaw workspace files using these values: Business = Acme Widgets, Operator = Jane, Agent = WidgetBot, Timezone = America/Chicago, Orders Sheet ID = 1abc..., Config Sheet ID = 2def..., Customers Sheet ID = 3ghi..., WhatsApp Group = Acme Orders, Backup Repo = acme-corp/openclaw-backup"`. This ensures consistency across all 13 files.
 
 **3.1 — SOUL.md (Security Constitution + Core Purpose)**
 
@@ -292,8 +292,8 @@ your domain.
 ## Data Architecture
 - **Orders:** Google Sheets (ID: [ORDERS_SHEET_ID]) — the single source of truth
   for all customer orders. Append new orders; never delete rows.
-- **Inventory:** Google Sheets (ID: [INVENTORY_SHEET_ID]) — product catalog
-  with availability and pricing.
+- **Config:** Google Sheets (ID: [CONFIG_SHEET_ID]) — business config
+  (form_url, unit_price, venmo_handle, pickup_location).
 - **Customers:** Google Sheets (ID: [CUSTOMERS_SHEET_ID]) — customer directory
   with contact info, order history summary, and preferences.
 - **System Log:** Local file ~/.openclaw/workspace/SYSTEM_LOG.md — operational
@@ -376,7 +376,7 @@ your domain.
 - When responding in the WhatsApp business group ([BUSINESS_GROUP_JID]),
   act ONLY as an order assistant. You help with:
   1. Placing new orders (append to Orders sheet)
-  2. Checking item availability (read Inventory sheet)
+  2. Confirming payments (screenshot verification via delegation)
   3. Checking a customer's own recent order status
   4. Cancelling a customer's own pending orders
 - REFUSE all other requests in the WhatsApp group. Use this exact response:
@@ -451,7 +451,7 @@ your domain.
 
 ## Tool Access
 - **Enabled:** brave_search (market research), github (backup repo only),
-  gog (Google Sheets — Orders, Inventory, Customers sheets only),
+  gog (Google Sheets — Orders, Config, Customers sheets only),
   memory_search, memory_get
 - **Exec:** Available, restricted by allowlist (`/home/clawuser/.local/bin/gog`, `/home/clawuser/scripts/safe-git.sh`, `/home/clawuser/scripts/daily_backup.sh`, and `/home/clawuser/scripts/hourly_checkpoint.sh` only)
 - **Disabled:** email_*, browser_*, ssh_*, gateway_config, gdrive_*, gmail_*
@@ -464,7 +464,7 @@ your domain.
 
 ## Google Sheets Access
 - Orders sheet: [ORDERS_SHEET_ID] — read/append/update
-- Inventory sheet: [INVENTORY_SHEET_ID] — read only (operator manages stock)
+- Config sheet: [CONFIG_SHEET_ID] — read only (operator manages config values)
 - Customers sheet: [CUSTOMERS_SHEET_ID] — read/append/update
 - Do NOT create new spreadsheets. Do NOT access any other sheet IDs.
 
@@ -533,7 +533,7 @@ your domain.
 ## Session Management
 - Monitor your context usage. If a session becomes long, use /compact to
   summarize history before hitting limits.
-- For long order-processing days, start a /new session after completing a
+- For long order-checkout days, start a /new session after completing a
   batch of work. Your memory files persist across sessions.
 ```
 
@@ -551,9 +551,9 @@ your domain.
 
 ## Google Sheets (Data Backend)
 - Orders: https://docs.google.com/spreadsheets/d/[ORDERS_SHEET_ID]
-  Columns: Name | Item | Quantity | Timestamp | Status | Channel | Notes
-- Inventory: https://docs.google.com/spreadsheets/d/[INVENTORY_SHEET_ID]
-  Columns: Item | Available | Price | Category
+  Columns: Name | Item | Quantity | Timestamp | Status | Channel | Notes | Order ID | Payment Status | Week | Venmo Confirmation ID
+- Config: https://docs.google.com/spreadsheets/d/[CONFIG_SHEET_ID]
+  Keys: form_url | form_responses_sheet_url | unit_price | venmo_handle | pickup_location
 - Customers: https://docs.google.com/spreadsheets/d/[CUSTOMERS_SHEET_ID]
   Columns: Name | Phone/Handle | First Order Date | Total Orders | Preferences | Last Contact
 ```
@@ -975,7 +975,7 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - **OpenClaw Gateway:** Runs as a persistent daemon on localhost:18789
 - **Config:** ~/.openclaw/openclaw.json (contains API keys — NEVER modify)
 - **Workspace:** This directory (~/.openclaw/workspace/)
-- **Data backend:** Google Sheets (Orders, Inventory, Customers)
+- **Data backend:** Google Sheets (Orders, Config, Customers)
   accessed via gog CLI
 - **Messaging:** WhatsApp (customer-facing), Telegram (operator alerts/reports)
 - **Backups:** Nightly git push to private GitHub repo via ~/scripts/daily_backup.sh
@@ -988,7 +988,7 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - USER.md — Operator context and Google Sheets IDs
 - HEARTBEAT.md — Hourly health check configuration
 - SYSTEM_LOG.md — Operational audit trail
-- skills/ — Custom SKILL.md files for order-processing, reports, etc.
+- skills/ — Custom SKILL.md files for order-checkout, payments, reports, etc.
 - memory/ — Agent memory files (daily + long-term)
 - MEMORY.md — Curated long-term facts, loaded every session, indexed for search
 
@@ -1022,7 +1022,7 @@ OpenClaw cannot exec, spawn, or reference Claude Code in any way.
 
 Create custom skills in `~/.openclaw/workspace/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gog sheets` CLI.
 
-> **Claude Code users:** This is the highest-ROI phase for Claude Code. Give it all your placeholder values and let it create all 7 skill files in one session. Example: `"Create all 7 domain skills from the setup guide, using these sheet IDs: Orders=[ID], Inventory=[ID], Customers=[ID]"`.
+> **Claude Code users:** This is the highest-ROI phase for Claude Code. Give it all your placeholder values and let it create all 11 skill files in one session. Example: `"Create all 11 domain skills from the setup guide, using these sheet IDs: Orders=[ID], Config=[ID], Customers=[ID]"`.
 
 #### Skill Architecture (How Skills Work)
 
@@ -1040,60 +1040,172 @@ Before creating skills, understand how OpenClaw processes them:
 
 - **Frontmatter fields:** `name` (routing key), `description` (routing text), `metadata.openclaw.emoji` (display icon), `metadata.openclaw.requires.bins` (binary dependency check — Gateway verifies these exist before enabling the skill).
 
-- **Skill body convention:** The 7 skills below follow a runbook format: **When to Use** (trigger conditions) → **Workflow** (step-by-step actions) → **Edge Cases** (what to do when things go wrong) → **Output** (expected response format). This structure gives the agent clear, unambiguous instructions. Vague skill instructions ("handle orders appropriately") fail; specific ones ("validate items against inventory sheet, reject if quantity < 1, confirm via WhatsApp with order summary") succeed.
+- **Skill body convention:** The 11 skills below follow a runbook format: **When to Use** (trigger conditions) → **Workflow** (step-by-step actions) → **Edge Cases** (what to do when things go wrong) → **Output** (expected response format). This structure gives the agent clear, unambiguous instructions. Vague skill instructions ("handle orders appropriately") fail; specific ones ("validate items against inventory sheet, reject if quantity < 1, confirm via WhatsApp with order summary") succeed.
 
-**4.1 — Order Processing Skill**
+**4.1 — Order Checkout Skill**
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/order-processing
+mkdir -p ~/.openclaw/workspace/skills/order-checkout
 ```
 
-Create `~/.openclaw/workspace/skills/order-processing/SKILL.md`:
+Create `~/.openclaw/workspace/skills/order-checkout/SKILL.md`:
 ```markdown
 ---
-name: order-processing
-description: Process incoming WhatsApp customer orders, validate items against inventory, log to Google Sheets, and confirm with customer.
+name: order-checkout
+description: Batch-process weekly Google Form responses into orders with Venmo payment links, sent via WhatsApp DM.
 metadata:
   openclaw:
-    emoji: 📦
+    emoji: "\U0001F4E6"
     requires:
       bins: [gog]
 ---
-# Order Processing
+# Order Checkout
 
 ## When to Use
-Customer sends a message containing item names, quantities, or asks to place an order.
+CRON-triggered every Tuesday at 10:15 PM PT, after the ordering window closes.
+Can also be triggered manually by the operator via Telegram.
+
+## Configuration
+- Config Sheet ID: [CONFIG_SHEET_ID]
+- Orders Sheet ID: [ORDERS_SHEET_ID]
+- Customers Sheet ID: [CUSTOMERS_SHEET_ID]
+
+## Order ID Format
+`AN-WYYXX-NNN` where:
+- `AN` = Asianova prefix
+- `W` = week indicator
+- `YY` = 2-digit year
+- `XX` = ISO week number (zero-padded)
+- `NNN` = sequential order number within the week (001, 002, ...)
+
+Example: `AN-W2609-001` = first order, week 9 of 2026.
+
+To determine the current week number: use the ISO week of the current Tuesday.
 
 ## Workflow
-1. Parse the customer message for item names and quantities.
-2. Look up inventory: `gog sheets read [INVENTORY_SHEET_ID] "Sheet1!A:D"`
-   - Match requested items against the Item column.
-   - Verify "Available" column is "Yes".
-3. Look up customer: `gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"`
-   - Search by name or phone/handle from the message.
-   - If new customer, append to Customers sheet after order is placed.
-4. If all items are valid and available:
-   a. Append row to Orders sheet:
-      `gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:G" "Name,Item,Quantity,YYYY-MM-DD HH:MM,pending,whatsapp,"`
-   b. Update Customers sheet: increment Total Orders, update Last Contact date.
-   c. Send confirmation to customer via originating WhatsApp channel:
-      "✅ Order confirmed: [Quantity]x [Item] for [Name]. Thank you!"
-   d. Update memory with customer preference if this is a repeat customer.
-5. If any item is unavailable or unknown, do NOT place a partial order.
-   Respond with the full issue and ask the customer to revise.
+
+### Step 0: Load Config
+```
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
+```
+Parse the response into key-value pairs. Extract:
+- `form_responses_sheet_url` — the Form Responses spreadsheet URL. Extract the sheet ID from the URL (the segment between `/d/` and the next `/`).
+- `unit_price` — price per unit (number)
+- `venmo_handle` — Venmo handle for payment links
+- `pickup_location` — Saturday pickup address
+
+If the Config sheet is inaccessible or any required value is empty, STOP and alert operator via Telegram:
+"Order checkout aborted: Config sheet missing value for [key]. Please update the Config sheet."
+
+### Step 1: Read Form Responses
+```
+gog sheets read [FORM_RESPONSES_SHEET_ID] "Form Responses 1!A:E"
+```
+(where `[FORM_RESPONSES_SHEET_ID]` is extracted from the URL in Step 0)
+
+Expected columns:
+- A: Timestamp
+- B: Quantity (How many Ramen Eggs)
+- C: Phone (WhatsApp number with country code, e.g., +14155551234)
+- D: Name
+- E: Processed (Order ID if already processed, empty if not)
+
+### Step 2: Filter Unprocessed Rows
+Skip the header row. For each data row, check column E:
+- If non-empty → already processed, skip
+- If empty → process this row
+
+If zero unprocessed rows, send operator Telegram: "No new form responses to process." and stop.
+
+### Step 3: Normalize & Validate Each Row
+For each unprocessed row:
+
+**Phone normalization (before validation):**
+- If phone is 10 digits with no `+` prefix → prepend `+1` (US number)
+- If phone starts with `1` and is 11 digits with no `+` → prepend `+`
+- If phone already starts with `+` → leave as-is
+
+**Then validate:**
+- Name is non-empty
+- Phone matches pattern: starts with `+`, 10-15 digits
+- Quantity is a positive integer
+
+If validation fails, log the row to SYSTEM_LOG.md and skip it.
+Include skipped rows in the operator summary.
+
+### Step 4: Generate Orders
+For each valid row:
+1. Generate Order ID: `AN-WYYXX-NNN` (increment NNN from 001 for each order this batch)
+2. Calculate total: quantity * {unit_price}
+3. Strip any leading `@` from `venmo_handle` (e.g. `@ray_wu` → `ray_wu`).
+4. Compute the next Saturday date from the current Tuesday (checkout day + 4 days). Format as `Saturday, Month Day` (e.g., `Saturday, March 1`).
+
+### Step 5: Write to Orders Sheet
+For each order, append a row:
+```
+gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:K" "Name|Ramen Eggs|Quantity|YYYY-MM-DD HH:MM|pending|whatsapp-form||ORDER_ID|unpaid|WYYXX|"
+```
+Columns: Name | Item | Quantity | Timestamp | Status | Channel | Notes (leave empty) | Order ID | Payment Status | Week | Venmo Confirmation ID
+
+### Step 6: Update Customers Sheet
+For each order:
+```
+gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"
+```
+- If customer exists (match by phone): increment Total Orders, update Last Contact
+- If new customer: append row with Name, Phone, today's date, 1, "", today's date
+
+### Step 7: Mark Form Responses as Processed
+For each processed row, write the Order ID to column E:
+```
+gog sheets update [FORM_RESPONSES_SHEET_ID] "Form Responses 1!E{ROW}" "ORDER_ID"
+```
+This prevents double-processing on re-runs.
+
+### Step 8: Send WhatsApp DMs
+For each order, send a DM to the customer's phone number:
+
+```
+Hi {Name}! Your Ramen Egg order has been received.
+
+Order ID: {ORDER_ID}
+Ordered: {order_timestamp}
+Quantity: {Quantity}
+Total: ${Total}
+
+Pay via Venmo: https://venmo.com/{venmo_handle}?txn=pay&amount={Total}&note={ORDER_ID}
+Please include your Order ID ({ORDER_ID}) in the Venmo payment note.
+
+After paying, send a screenshot of your Venmo payment here and I'll confirm your order.
+
+Payment deadline: Wednesday 2 PM PT. Unpaid orders are automatically cancelled.
+
+Pickup: {next_saturday_date}, 1-3 PM at {pickup_location}.
+```
+
+Where:
+- `{order_timestamp}` = the form submission timestamp from column A (e.g., "2/25/2026 3:42 PM")
+- `{next_saturday_date}` = the Saturday following checkout day, computed in Step 4 (e.g., "Saturday, March 1")
+
+### Step 9: Operator Summary
+Send to operator Telegram:
+
+```
+Order Checkout Complete — Week {WYYXX}
+Orders processed: {count}
+Total units: {sum of quantities}
+Total revenue (pending): ${sum of totals}
+Skipped (validation errors): {count}
+DMs sent: {count}
+```
 
 ## Edge Cases
-- Unknown items → Respond: "Item not found. Here's what we currently offer:"
-  then list available items from the Inventory sheet.
-- Duplicate order within 5 minutes (same customer + same items) →
-  Ask: "You placed a similar order moments ago. Confirm this is a new order?"
-- Missing quantity → Ask: "How many [item] would you like?"
-- Missing customer name → Ask before logging.
-- Google Sheets API error → Log to SYSTEM_LOG.md, alert operator via Telegram,
-  tell customer: "Order system temporarily unavailable. We'll follow up shortly."
+- Google Sheets API error mid-batch → stop processing, alert operator with what succeeded and what remains
+- Phone number not on WhatsApp → log to SYSTEM_LOG.md, include in operator summary as "DM failed"
+- Duplicate phone+name in same batch → process both as separate orders (customer may order for others)
 
 ## Output
-Row appended to Orders sheet. Customer record updated. Confirmation sent.
+Orders appended to Orders sheet. Customers sheet updated. Form responses marked as processed. WhatsApp DMs sent. Operator summary via Telegram.
 ```
 
 **4.2 — Customer Lookup Skill**
@@ -1117,8 +1229,8 @@ metadata:
 
 ## When to Use
 Operator or agent needs customer context — repeat order patterns, last contact,
-preferences, or total order count. Also triggered internally before processing
-a new order to identify repeat customers.
+preferences, or total order count. Used during weekly order checkout to identify
+repeat customers and update records.
 
 ## Workflow
 1. Search Customers sheet: `gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"`
@@ -1126,7 +1238,7 @@ a new order to identify repeat customers.
 3. If found, retrieve:
    - Name, Phone/Handle, First Order Date, Total Orders, Preferences, Last Contact
 4. Optionally cross-reference Orders sheet for recent order detail:
-   `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:G"` and filter by name.
+   `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"` and filter by name.
 5. Present results concisely. For operator queries, include full detail.
    For internal skill calls, return structured data for the calling skill.
 
@@ -1140,53 +1252,7 @@ a new order to identify repeat customers.
 Structured customer profile with order history summary.
 ```
 
-**4.3 — Inventory Check Skill**
-
-```bash
-mkdir -p ~/.openclaw/workspace/skills/inventory-check
-```
-
-Create `~/.openclaw/workspace/skills/inventory-check/SKILL.md`:
-```markdown
----
-name: inventory-check
-description: Check product availability, pricing, and stock status from the Inventory Google Sheet.
-metadata:
-  openclaw:
-    emoji: 📋
-    requires:
-      bins: [gog]
----
-# Inventory Check
-
-## When to Use
-When someone asks what's available, checks a specific item's price or stock,
-or when the order-processing skill needs to validate items before confirming.
-
-## Workflow
-1. Read inventory: `gog sheets read [INVENTORY_SHEET_ID] "Sheet1!A:D"`
-2. If checking a specific item: match against the Item column (case-insensitive).
-3. Return: Item name, Available (Yes/No), Price, Category.
-4. If listing all available items: filter to Available = "Yes" and format as
-   a clean list grouped by Category.
-
-## Edge Cases
-- Item not found → "That item isn't in our catalog. Here's what we carry: [list]"
-- Item found but unavailable → "Sorry, [item] is currently out of stock.
-  Similar items available: [suggest from same category]"
-- Sheets API error → Log to SYSTEM_LOG.md and alert operator.
-
-## IMPORTANT
-- This skill is READ-ONLY. Never modify the Inventory sheet.
-  The operator manages stock levels directly in Google Sheets.
-- Do not cache inventory data across messages — always read fresh
-  from the sheet to ensure current availability.
-
-## Output
-Item availability and pricing information.
-```
-
-**4.4 — Order Amendment Skill**
+**4.3 — Order Amendment Skill**
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills/order-amendment
@@ -1199,47 +1265,351 @@ name: order-amendment
 description: Modify or cancel an existing customer order in the Orders Google Sheet.
 metadata:
   openclaw:
-    emoji: ✏️
+    emoji: "\u270F\uFE0F"
     requires:
       bins: [gog]
 ---
 # Order Amendment
 
 ## When to Use
-Customer requests a change to a recent order (different quantity, different item,
-cancellation) or operator asks to update an order status.
+Customer requests a change to a recent order (different quantity, cancellation)
+or operator asks to update an order status.
 
 ## Workflow
-1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:G"`
-2. Find the matching order by customer name + item + recent timestamp.
-3. Verify the order Status is "pending" (not "shipped" or "completed").
-   - If already shipped/completed → "This order has already been [status]
-     and cannot be modified. Please contact [operator] directly."
-4. For modifications:
+1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"`
+2. Find the matching order by customer name + Order ID or recent timestamp.
+3. Verify the order Status is NOT "cancelled".
+   - If cancelled: "This order has been cancelled and cannot be modified.
+     Please place a new order via the Google Form if you'd like to reorder."
+4. Verify the order Payment Status is NOT "paid".
+   - If already paid: "This order has already been paid and cannot be modified.
+     Please contact Ray Wu directly."
+5. Check the deadline: if the current time is after Tuesday 10:00 PM PT of the
+   order's week, amendments require operator approval.
+   - Respond: "The ordering window for this week has closed. I've forwarded your
+     request to the operator for approval."
+   - Send the amendment request to operator via Telegram and wait for confirmation.
+6. For modifications:
    a. Update the relevant cell(s) using `gog sheets update`.
    b. Add a note in the Notes column: "Amended [date]: [what changed]"
-   c. Confirm with customer: "✅ Order updated: [new details]"
-5. For cancellations:
+   c. If quantity changed, recalculate total and update.
+   d. Confirm with customer: "Order updated: [new details]"
+7. For cancellations:
    a. Update Status to "cancelled" (do NOT delete the row).
-   b. Add note: "Cancelled [date] by customer request"
-   c. Confirm: "Order cancelled. Let us know if you'd like to place a new one."
-6. Log amendment to SYSTEM_LOG.md.
+   b. Update Payment Status to "cancelled".
+   c. Add note: "Cancelled [date] by customer request"
+   d. Confirm: "Order cancelled. Let us know if you'd like to place a new one."
+8. Log amendment to SYSTEM_LOG.md.
 
 ## Edge Cases
-- Multiple matching orders → List them and ask which one to amend.
-- No matching order found → "I couldn't find a recent order matching that
-  description. Can you provide more details?"
-- Ambiguous change → Ask for clarification before modifying.
+- Multiple matching orders: List them with Order IDs and ask which one to amend.
+- No matching order found: "I couldn't find a recent order matching that
+  description. Can you provide your Order ID?"
+- Ambiguous change: Ask for clarification before modifying.
 
 ## NEVER
 - Delete rows from the Orders sheet. Always use status changes.
-- Amend orders that are shipped or completed.
+- Amend orders that have Payment Status = "paid".
+- Amend orders that have Status = "cancelled".
+- Process amendments after the Tuesday deadline without operator approval.
 
 ## Output
 Updated row in Orders sheet. Confirmation sent to customer. Log entry written.
 ```
 
-**4.5 — Weekly Report Skill**
+**4.4 — Payment Confirmation Skill**
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/payment-confirmation
+```
+
+Create `~/.openclaw/workspace/skills/payment-confirmation/SKILL.md`:
+```markdown
+---
+name: payment-confirmation
+description: Receive Venmo payment screenshots in WhatsApp DM, delegate verification to main session via sessions_send, poll for confirmation, and notify customer.
+metadata:
+  openclaw:
+    emoji: "\U0001F4B0"
+    requires:
+      bins: [gog]
+---
+# Payment Confirmation (Delegation Model)
+
+## When to Use
+Triggered when a customer sends an image in a WhatsApp DM.
+
+This skill runs in a sandboxed session. It CANNOT read images directly (Docker 28 CWD restriction). Instead, it delegates image verification to the main session via `sessions_send` and polls the Orders sheet for the result.
+
+## Configuration
+- Orders Sheet ID: [ORDERS_SHEET_ID]
+- Customers Sheet ID: [CUSTOMERS_SHEET_ID]
+- Config Sheet ID: [CONFIG_SHEET_ID]
+
+## Workflow
+
+### Step 0: Load Config
+```
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
+```
+Parse the response into key-value pairs. Extract:
+- `unit_price` — price per unit (number)
+- `pickup_location` — Saturday pickup address
+
+If the Config sheet is inaccessible or either value is empty, STOP and respond to the customer:
+"I'm having a temporary issue verifying payments. Please try again shortly or contact Ray Wu directly."
+Alert operator via Telegram: "Payment confirmation aborted: Config sheet missing value for [key]."
+
+Log to SYSTEM_LOG.md:
+```
+## YYYY-MM-DD HH:MM UTC — Payment Validation Failed
+- Phone: {phone}
+- Reason: Config sheet inaccessible or missing value for {key}
+- Customer response: "I'm having a temporary issue verifying payments. Please try again shortly or contact Ray Wu directly."
+```
+
+### Step 1: Receive Message
+When a customer sends a message in WhatsApp DM:
+
+**If an image is attached** — the message contains a media marker like `[media attached: media/inbound/{uuid}.jpg ...]`:
+- Extract the `media/inbound/{uuid}.jpg` path from the marker text
+- Proceed to Step 2
+
+**If text-only (no image):**
+- If customer says they've paid but sends no screenshot → respond:
+  "Thanks for letting me know! To confirm your payment, I just need a screenshot of the Venmo transaction. Could you send one over?"
+- If customer asks how to find the transaction on Venmo → respond:
+  "Here's how to find your payment on Venmo:
+  1. Open the Venmo app — your recent transactions are right on the home screen
+  2. Find the payment and tap on it to see the full details
+  3. Take a screenshot of that screen and send it here!"
+- If customer asks about their order status → look up their order in the Orders sheet and report: "Your order {ORDER_ID} is currently {status}."
+- STOP (do not proceed to Step 2)
+
+### Step 2: Look Up Customer's Unpaid Orders
+Match the sender's phone number to find their customer name and unpaid orders:
+```
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"
+```
+
+Find rows where the customer name matches and Payment Status = "unpaid" (or Status = "pending").
+
+If no unpaid orders found:
+- Check for recently auto-cancelled orders (Status = "cancelled", Notes contain "Auto-cancelled"):
+  - If found: "Your order ({ORDER_ID}) was auto-cancelled because payment wasn't received by the Wednesday 2 PM deadline. I've flagged this for the operator — they'll reach out about a possible reinstatement."
+  - Include the image path in the delegation message (Step 3) so the operator can review.
+  - Log to SYSTEM_LOG.md and STOP.
+- If no auto-cancelled order either: "I don't see an unpaid order for your number. If you think this is an error, please contact Ray Wu directly."
+  - Log to SYSTEM_LOG.md and STOP.
+- If customer has no orders at all: "I don't have an order on file for you yet. Please submit your order via the Google Form first."
+  - STOP.
+
+Collect the list of unpaid order IDs for the notification.
+
+### Step 3: Delegate to Main Session
+Use `sessions_send` to notify the main session (fire-and-forget with `timeoutSeconds: 0`):
+
+Target session: `agent-main-telegram-direct-5906288273`
+
+Message format (use absolute path):
+```
+Payment screenshot from {Name} ({phone}) at /home/clawuser/.openclaw/media/inbound/{uuid}.jpg.
+Unpaid orders: {order_id_list}. Please verify and update Orders sheet.
+NOTE: Do not message the customer directly — the sandbox session handles customer DMs.
+```
+
+### Step 4: Acknowledge to Customer
+Immediately reply to the customer:
+"Got your screenshot! Verifying your payment now — I'll confirm shortly."
+
+### Step 5: Poll Orders Sheet
+Poll the Orders sheet every 30 seconds for up to 3 minutes (max 6 polls):
+```
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"
+```
+
+Check if ANY of the customer's previously-unpaid order IDs now have:
+- Status (column E) = `confirmed` AND Payment Status (column I) = `paid`
+
+If confirmed → proceed to Step 6.
+If not confirmed after 3 minutes → respond:
+"Your payment is being reviewed. You'll hear back shortly."
+Log to SYSTEM_LOG.md and STOP.
+
+### Step 6: Send Confirmation DM
+Compute the pickup Saturday from the confirmed order's Week column (e.g., `W2609` → Saturday of ISO week 9, 2026). Format as `Saturday, Month Day`.
+
+```
+Payment confirmed! Thank you, {Name}.
+
+Order ID: {ORDER_ID}
+Quantity: {Quantity} Ramen Eggs
+Total paid: ${Total}
+
+Pickup: {pickup_saturday_date}, 1-3 PM at {pickup_location}.
+See you there!
+```
+
+### Step 7: Log to SYSTEM_LOG.md (mandatory)
+```
+## YYYY-MM-DD HH:MM UTC — Payment Confirmation (delegated)
+- Order: {ORDER_ID} ({Name}, {Quantity} Ramen Eggs, ${Total})
+- Image delegated: media/inbound/{uuid}.jpg
+- Verification: completed by main session
+- Confirmation DM sent to {phone}
+```
+
+## Edge Cases
+- Customer sends multiple screenshots → process only the first valid one per interaction; if a second arrives during polling, let it trigger a new skill invocation
+- Customer has multiple unpaid orders → include all order IDs in the `sessions_send` notification; main session resolves which one
+- Non-image DM about payment status → handled in Step 1 text-only path
+- `sessions_send` fails → respond: "I'm having trouble processing your payment right now. Please try again in a few minutes or contact Ray Wu directly." Log the error.
+
+## Rules
+- NEVER attempt to read images directly — always delegate via sessions_send
+- NEVER mark an order as paid from the sandbox — only main session updates the sheet
+- NEVER share other customers' order details
+- If anything looks suspicious, log to SYSTEM_LOG.md and alert operator via Telegram
+```
+
+**4.5 — Payment Verification Skill**
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/payment-verification
+```
+
+Create `~/.openclaw/workspace/skills/payment-verification/SKILL.md`:
+```markdown
+---
+name: payment-verification
+description: Main-session skill triggered by sessions_send from sandbox. Reads payment screenshot from disk, validates against Orders sheet, updates status.
+metadata:
+  openclaw:
+    emoji: "\U0001F50D"
+    requires:
+      bins: [gog]
+---
+# Payment Verification (Main Session)
+
+## When to Use
+Triggered when the main session receives a `sessions_send` message from a sandbox session containing `payment screenshot` AND a `media/inbound/` path.
+
+This skill runs on the host (not sandboxed) and can read images directly from disk.
+
+## Configuration
+- Config Sheet ID: [CONFIG_SHEET_ID]
+- Orders Sheet ID: [ORDERS_SHEET_ID]
+- Customers Sheet ID: [CUSTOMERS_SHEET_ID]
+
+## Workflow
+
+### Step 1: Parse the Notification
+The `sessions_send` message from the sandbox follows this format:
+```
+Payment screenshot from {Name} ({phone}) at /home/clawuser/.openclaw/media/inbound/{uuid}.jpg.
+Unpaid orders: {order_id_list}. Please verify and update Orders sheet.
+```
+
+Extract:
+- `image_path` — the absolute path `/home/clawuser/.openclaw/media/inbound/{uuid}.jpg`
+- `customer_name` — the customer name
+- `phone` — the customer phone number
+- `order_ids` — comma-separated list of unpaid order IDs
+
+### Step 2: Read the Screenshot
+Use the `image` tool to read the file at the absolute path extracted from the notification (e.g. `/home/clawuser/.openclaw/media/inbound/{uuid}.jpg`).
+
+If the file doesn't exist or can't be read, respond in Telegram:
+"Payment verification failed: image file not found at {image_path}. Customer: {Name} ({phone})."
+Log to SYSTEM_LOG.md and STOP.
+
+### Step 3: Extract Payment Details
+From the Venmo screenshot, extract:
+- **Payment amount** (dollar value)
+- **Order ID** from the Venmo note/memo field (pattern: `AN-WYYXX-NNN`, optional)
+
+If the screenshot is blurry, cropped, or unreadable:
+  Respond in Telegram: "Payment screenshot from {Name} ({phone}) is unreadable. Path: {image_path}. Please review manually."
+  Log to SYSTEM_LOG.md and STOP.
+
+If the image is not a Venmo payment screenshot:
+  Respond in Telegram: "Image from {Name} ({phone}) is not a Venmo screenshot. Path: {image_path}."
+  Log to SYSTEM_LOG.md and STOP.
+
+### Step 4: Load Config
+```
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
+```
+Extract `unit_price` (number). If inaccessible, respond in Telegram and STOP.
+
+### Step 5: Look Up and Validate Order
+```
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"
+```
+
+**Path A — Order ID extracted from screenshot:**
+- Look up that specific order ID
+- Verify it belongs to the customer (match name or phone)
+- If not found or wrong customer → respond in Telegram with details, STOP
+
+**Path B — No Order ID in screenshot:**
+- Use the `order_ids` list from the notification (sandbox already looked these up)
+- If exactly one unpaid order → use it
+- If multiple unpaid orders → respond in Telegram: "Multiple unpaid orders for {Name}: {order_ids}. Screenshot doesn't contain an Order ID. Please ask customer or resolve manually."
+  Log to SYSTEM_LOG.md and STOP.
+
+**Validate payment amount:**
+Compare extracted amount to order total (Quantity * unit_price). Must match within $0.50 tolerance.
+
+If mismatch:
+  Respond in Telegram: "Payment amount mismatch for {Name}: screenshot shows ${extracted}, expected ${expected} for {ORDER_ID} ({quantity} x ${unit_price})."
+  Log to SYSTEM_LOG.md and STOP. Do NOT update the sheet.
+
+### Step 6: Update Orders Sheet
+```
+gog sheets update [ORDERS_SHEET_ID] "Sheet1!E{ROW}" "confirmed"
+gog sheets update [ORDERS_SHEET_ID] "Sheet1!I{ROW}" "paid"
+```
+
+Status (column E): `pending` → `confirmed`
+Payment Status (column I): → `paid`
+
+### Step 7: Send Operator Telegram Summary
+Send a Telegram message to the operator (and ONLY the operator — do NOT send any customer-facing messages, do NOT offer to send customer DMs):
+```
+Payment verified for {Name} ({phone}).
+Order: {ORDER_ID} — {Quantity} Ramen Eggs, ${Total}
+Status updated: confirmed / paid
+```
+
+### Step 8: Log to SYSTEM_LOG.md
+```
+## YYYY-MM-DD HH:MM UTC — Payment Verification (via delegation)
+- Order: {ORDER_ID} ({Name}, {Quantity} Ramen Eggs, ${Total})
+- Image: {image_path}
+- Match: order ID from screenshot | sandbox order list
+- Orders sheet row {ROW} updated: status → confirmed, payment → paid
+- Operator notified via Telegram
+```
+
+## Edge Cases
+- **Auto-cancelled order:** If the matched order has Status = "cancelled" and Notes contain "Auto-cancelled":
+  Respond in Telegram: "Late payment from {Name} for auto-cancelled order {ORDER_ID}. Screenshot at {image_path}. Please review for manual reinstatement."
+  Log to SYSTEM_LOG.md. Do NOT update the sheet automatically.
+- **No matching order at all:** Respond in Telegram with customer details and STOP.
+- **Multiple screenshots in quick succession:** Process each notification independently.
+
+## Rules
+- NEVER send WhatsApp DMs to customers — the sandbox session handles all customer-facing messages
+- The phone number in the sessions_send notification is for logging and operator context ONLY — never use it as a message target
+- Your only outbound messages are Telegram notifications to the operator
+- NEVER mark an order as paid without validating the screenshot amount
+- NEVER share customer details outside of Telegram operator messages
+- All failures go to Telegram operator + SYSTEM_LOG.md
+- This skill only runs in the main session (host, not sandboxed)
+```
+
+**4.6 — Weekly Report Skill**
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills/weekly-report
@@ -1249,10 +1619,10 @@ Create `~/.openclaw/workspace/skills/weekly-report/SKILL.md`:
 ```markdown
 ---
 name: weekly-report
-description: Generate and send weekly business performance summary from Google Sheets order data to operator Telegram.
+description: Generate and send weekly business performance summary with payment metrics from Google Sheets order data to operator Telegram.
 metadata:
   openclaw:
-    emoji: 📊
+    emoji: "\U0001F4CA"
     requires:
       bins: [gog]
 ---
@@ -1262,41 +1632,46 @@ metadata:
 Every Sunday at 8:00 AM (triggered by CRON), or when operator requests a report.
 
 ## Workflow
-1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:G"`
+1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"`
 2. Filter to orders from the last 7 days (by Timestamp column).
 3. Exclude rows with Status = "cancelled".
 4. Calculate:
    - Total orders
+   - Total units ordered
    - Unique customers (distinct Name values)
-   - Top 5 items by total quantity
-   - Daily breakdown (Mon–Sun order counts)
    - New customers this week (cross-reference Customers sheet First Order Date)
+   - Payment collection rate: paid orders / total orders (percentage)
+   - Total revenue collected (sum of paid order totals)
+   - Unpaid orders list (Order ID, Name, Amount)
+   - Cancellation breakdown: total cancelled, auto-cancelled (Notes column G contains "Auto-cancelled") vs customer-cancelled
+   - Daily breakdown (Mon-Sun order counts)
 5. Format as a structured Telegram message:
-   📊 Weekly Report ([start date] – [end date])
-   ─────────────────────────
+   Weekly Report ([start date] - [end date])
+   ---
    Total Orders: X
+   Total Units: X Ramen Eggs
    Unique Customers: X (Y new)
-   ─────────────────────────
-   Top Items:
-   1. [Item] — X units
-   2. [Item] — X units
-   ...
-   ─────────────────────────
+   ---
+   Revenue Collected: $XX (Y% collection rate)
+   Unpaid: X orders ($YY outstanding)
+   [List each: ORDER_ID - Name - $Amount]
+   Cancellations: X total (Y by customer, Z auto-cancelled)
+   ---
    Daily: Mon X | Tue X | Wed X | Thu X | Fri X | Sat X | Sun X
 6. Send to operator Telegram.
 
 ## Edge Cases
-- No orders this week → Send: "📊 Weekly Report: No orders recorded this week."
-- Sheets API error → Send alert: "⚠️ Cannot generate report — Sheets API issue."
+- No orders this week: Send: "Weekly Report: No orders recorded this week."
+- Sheets API error: Send alert: "Cannot generate report - Sheets API issue."
   Log to SYSTEM_LOG.md.
-- Large dataset (>1000 rows) → Read only the last 2000 rows to stay within
+- Large dataset (>1000 rows): Read only the last 2000 rows to stay within
   context limits, then filter by date.
 
 ## Output
 Formatted Telegram message to operator.
 ```
 
-**4.6 — Daily Summary Skill**
+**4.7 — Daily Summary Skill**
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills/daily-summary
@@ -1306,10 +1681,10 @@ Create `~/.openclaw/workspace/skills/daily-summary/SKILL.md`:
 ```markdown
 ---
 name: daily-summary
-description: Send a quick end-of-day recap of today's orders and any issues to operator Telegram.
+description: Send a quick end-of-day recap of today's orders and payment status to operator Telegram.
 metadata:
   openclaw:
-    emoji: 🌙
+    emoji: "\U0001F319"
     requires:
       bins: [gog]
 ---
@@ -1319,28 +1694,352 @@ metadata:
 Every day at 9:00 PM (triggered by CRON), or when operator asks for today's summary.
 
 ## Workflow
-1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:G"`
+1. Read Orders sheet: `gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"`
 2. Filter to today's orders (by Timestamp column).
-3. Calculate: total orders, items sold, any cancelled orders.
-4. Check Inventory sheet for items with Available = "No" (potential restocking alert).
-5. Check SYSTEM_LOG.md for any errors or alerts logged today.
-6. Format as a brief Telegram message:
-   🌙 Daily Recap — [date]
-   Orders: X pending, Y paid, Z cancelled
-   Top item: [Item] (X units)
-   ⚠️ Issues: [any errors or none]
-   📦 Out of stock: [items or "all clear"]
-7. Send to operator Telegram.
+3. Calculate:
+   - Total orders, total units, any cancelled orders
+   - Payment status: count and sum of paid vs unpaid orders
+   - Auto-cancelled count: orders where Notes column (G) contains "Auto-cancelled"
+4. Check SYSTEM_LOG.md for any errors or alerts logged today.
+5. Format as a brief Telegram message:
+   Daily Recap — [date]
+   Orders: X pending, Y paid, Z cancelled (W auto-cancelled)
+   Units: Z total
+   Payments: X paid ($XX) | Y unpaid ($YY)
+   Issues: [any errors or none]
+6. Send to operator Telegram.
 
 ## Edge Cases
-- No orders today → "🌙 Daily Recap — [date]: Quiet day, no orders."
-- Sheets API error → Send what you can from memory, note the API issue.
+- No orders today: "Daily Recap — [date]: Quiet day, no orders."
+- Sheets API error: Send what you can from memory, note the API issue.
 
 ## Output
 Brief Telegram message to operator. No files modified.
 ```
 
-**4.7 — Backup Automation Skill**
+**4.8 — Weekly Order Blast Skill**
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/weekly-order-blast
+```
+
+Create `~/.openclaw/workspace/skills/weekly-order-blast/SKILL.md`:
+```markdown
+---
+name: weekly-order-blast
+description: Send the weekly Google Form ordering link and deadline reminder to the WhatsApp group every Tuesday.
+metadata:
+  openclaw:
+    emoji: "\U0001F4E2"
+    requires:
+      bins: [gog]
+---
+# Weekly Order Blast
+
+## When to Use
+CRON-triggered every Tuesday. Two scheduled sends:
+- **9:00 AM PT** — Form link blast (ordering opens)
+- **4:00 PM PT** — Deadline reminder (orders close at 10 PM)
+
+### Step 0: Load Config
+```
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
+```
+Parse the response into key-value pairs. Extract:
+- `form_url` — the Google Form ordering link
+- `pickup_location` — Saturday pickup address
+
+If the Config sheet is inaccessible or either value is empty, STOP and alert operator via Telegram:
+"Weekly order blast aborted: Config sheet missing value for [key]. Please update the Config sheet."
+
+Compute the upcoming Saturday date from the current Tuesday (blast day + 4 days). Format as `Saturday, Month Day` (e.g., `Saturday, March 1`).
+
+Determine which message to send based on the current time:
+- Before 12:00 PM PT → send the **Form Link** message
+- 12:00 PM PT or later → send the **Deadline Reminder** message
+
+## Form Link Message (9 AM)
+Send to WhatsApp group (120363404090082823@g.us):
+
+```
+Hey everyone! This week's Ramen Egg orders are OPEN!
+
+Order here: {form_url}
+
+Orders close tonight at 10 PM.
+Pickup: {this_saturday_date}, 1-3 PM at {pickup_location}.
+Payment via Venmo only — you'll get a link after we process your order.
+
+Questions? Drop them here!
+```
+
+## Deadline Reminder (4 PM)
+Send to WhatsApp group (120363404090082823@g.us):
+
+```
+Reminder: Ramen Egg orders close at 10 PM tonight!
+
+Haven't ordered yet? {form_url}
+
+Pickup: {this_saturday_date}, 1-3 PM at {pickup_location}.
+```
+
+## Rules
+- Send ONLY to the WhatsApp group. Never DM customers from this skill.
+- Do NOT read or modify any Google Sheets data.
+- Do NOT process orders — that happens in the order-checkout skill.
+- If form_url from Config is empty or the Config sheet is inaccessible, do NOT send.
+  Instead alert operator via Telegram: "Form URL not configured in Config sheet."
+
+## Output
+Message sent to WhatsApp group.
+```
+
+**4.9 — Payment Reminder Skill**
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/payment-reminder
+```
+
+Create `~/.openclaw/workspace/skills/payment-reminder/SKILL.md`:
+```markdown
+---
+name: payment-reminder
+description: Send WhatsApp DM reminders to customers with unpaid pending orders, warning of the 2 PM PT auto-cancellation deadline.
+metadata:
+  openclaw:
+    emoji: "\u23F0"
+    requires:
+      bins: [gog]
+---
+# Payment Reminder
+
+## When to Use
+CRON-triggered every Wednesday at 10:00 AM PT.
+Can also be triggered manually by the operator via Telegram.
+
+## Configuration
+- Config Sheet ID: [CONFIG_SHEET_ID]
+- Orders Sheet ID: [ORDERS_SHEET_ID]
+- Customers Sheet ID: [CUSTOMERS_SHEET_ID]
+
+## Workflow
+
+### Step 0: Load Config
+```
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
+```
+Parse the response into key-value pairs. Extract:
+- `venmo_handle` — Venmo handle for payment links
+- `unit_price` — price per unit (number)
+- `pickup_location` — Saturday pickup address
+
+If the Config sheet is inaccessible or any required value is empty, STOP and alert operator via Telegram:
+"Payment reminder aborted: Config sheet missing value for [key]. Please update the Config sheet."
+
+### Step 1: Read Orders Sheet
+```
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"
+```
+
+### Step 2: Filter Current Week's Unpaid Orders
+Determine the current week code (WYYXX format using the ISO week of the preceding Tuesday).
+Filter rows where:
+- Week column (J) matches the current week code
+- Status column (E) = "pending"
+- Payment Status column (I) = "unpaid"
+
+If zero matching orders, send operator Telegram: "Payment Reminder — Week {WYYXX}: No pending/unpaid orders to remind." and stop.
+
+### Step 3: Resolve Phone Numbers
+For each matching order, look up the customer's phone number from the Customers sheet:
+```
+gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"
+```
+Match by customer Name (column A in Orders → column A in Customers). Extract phone from Customers column B.
+
+If a customer's phone number cannot be resolved, log to SYSTEM_LOG.md and include in the operator summary as "DM failed — no phone".
+
+### Step 4: Prepare Payment Data
+For each order:
+- Calculate total: Quantity (column C) * {unit_price}
+- Strip any leading `@` from `venmo_handle` (e.g. `@ray_wu` → `ray_wu`)
+
+### Step 5: Send WhatsApp DM Reminders
+Compute the pickup Saturday date from the current week (Wednesday + 3 days). Format as `Saturday, Month Day`.
+
+For each order, send a WhatsApp DM to the customer's phone number:
+
+```
+Hi {Name}! Friendly reminder — your Ramen Egg order is awaiting payment.
+
+Order ID: {ORDER_ID}
+Quantity: {Quantity}
+Total: ${Total}
+
+Pay via Venmo: https://venmo.com/{venmo_handle}?txn=pay&amount={Total}&note={ORDER_ID}
+Include your Order ID ({ORDER_ID}) in the Venmo note.
+
+After paying, send a screenshot of your Venmo payment here and I'll confirm your order.
+
+Please complete payment by 2 PM PT today (Wednesday), or your order will be automatically cancelled.
+
+Pickup: {pickup_saturday_date}, 1-3 PM at {pickup_location}.
+```
+
+### Step 6: Operator Summary
+Send to operator Telegram:
+
+```
+Payment Reminder Complete — Week {WYYXX}
+Reminders sent: {count}
+Total outstanding: ${sum of totals}
+DMs failed: {count} (if any)
+Orders reminded: {list of ORDER_IDs}
+```
+
+### Step 7: Log to SYSTEM_LOG.md
+Append an entry:
+```
+## YYYY-MM-DD HH:MM UTC — Payment Reminder
+- Week: {WYYXX}
+- Reminders sent: {count}
+- Outstanding: ${total}
+- DMs failed: {count and details, if any}
+```
+
+## Edge Cases
+- Customer paid between checkout and reminder (Payment Status changed to "paid") — skip them, they won't match the filter
+- Google Sheets API error — stop processing, alert operator with what succeeded and what remains
+- Phone number not on WhatsApp — log to SYSTEM_LOG.md, include in operator summary as "DM failed"
+
+## Rules
+- NEVER modify order status, payment status, or any sheet data. This skill is read-only + messaging.
+- NEVER send messages to the WhatsApp group. DMs only.
+- NEVER send reminders for orders that are not `pending` + `unpaid`.
+
+## Output
+WhatsApp DM reminders sent to unpaid customers. Operator summary via Telegram. Log entry written.
+```
+
+**4.10 — Auto-Cancel Skill**
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/auto-cancel
+```
+
+Create `~/.openclaw/workspace/skills/auto-cancel/SKILL.md`:
+```markdown
+---
+name: auto-cancel
+description: Auto-cancel unpaid pending orders after the Wednesday 2 PM PT payment deadline, notify customers and operator.
+metadata:
+  openclaw:
+    emoji: "\u274C"
+    requires:
+      bins: [gog]
+---
+# Auto-Cancel
+
+## When to Use
+CRON-triggered every Wednesday at 2:00 PM PT.
+Can also be triggered manually by the operator via Telegram.
+
+## Configuration
+- Orders Sheet ID: [ORDERS_SHEET_ID]
+- Customers Sheet ID: [CUSTOMERS_SHEET_ID]
+
+## Workflow
+
+### Step 1: Read Orders Sheet
+```
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A:K"
+```
+
+### Step 2: Filter Current Week's Pending Orders
+Determine the current week code (WYYXX format using the ISO week of the preceding Tuesday).
+Filter rows where:
+- Week column (J) matches the current week code
+- Status column (E) = "pending"
+
+If zero matching orders, send operator Telegram: "Auto-Cancel — Week {WYYXX}: No pending orders to cancel." and stop.
+
+### Step 3: Cancel Each Order
+For each matching order, update the Orders sheet:
+```
+gog sheets update [ORDERS_SHEET_ID] "Sheet1!E{ROW}" "cancelled"
+gog sheets update [ORDERS_SHEET_ID] "Sheet1!I{ROW}" "cancelled"
+gog sheets update [ORDERS_SHEET_ID] "Sheet1!G{ROW}" "{existing_notes}Auto-cancelled: payment deadline passed"
+```
+- Status (column E) → `cancelled`
+- Payment Status (column I) → `cancelled`
+- Notes (column G) → append `Auto-cancelled: payment deadline passed` (preserve any existing notes, separated by "; " if non-empty)
+
+### Step 4: Resolve Phone Numbers
+For each cancelled order, look up the customer's phone number from the Customers sheet:
+```
+gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A:F"
+```
+Match by customer Name (column A in Orders → column A in Customers). Extract phone from Customers column B.
+
+If a customer's phone number cannot be resolved, log to SYSTEM_LOG.md and include in the operator summary as "DM failed — no phone".
+
+### Step 5: Send Cancellation DMs
+For each cancelled order, send a WhatsApp DM to the customer's phone number:
+
+```
+Hi {Name}, your Ramen Egg order ({ORDER_ID}) has been cancelled because payment wasn't received by the 2 PM deadline.
+
+To order again, place a new order next Tuesday when the ordering window opens.
+
+Questions? Contact Ray Wu directly.
+```
+
+### Step 6: Operator Summary
+Calculate lost revenue: sum of (Quantity * unit_price) for all cancelled orders.
+
+Send to operator Telegram:
+
+```
+Auto-Cancel Complete — Week {WYYXX}
+Orders cancelled: {count}
+Lost revenue: ${total}
+DMs sent: {count}
+DMs failed: {count} (if any)
+
+Cancelled orders:
+{for each: ORDER_ID — Name — {Quantity} x ${unit_price} = ${total}}
+```
+
+### Step 7: Log to SYSTEM_LOG.md
+Append an entry:
+```
+## YYYY-MM-DD HH:MM UTC — Auto-Cancel
+- Week: {WYYXX}
+- Orders cancelled: {count}
+- Lost revenue: ${total}
+- Cancellation DMs sent: {count}
+- DMs failed: {count and details, if any}
+- Orders: {list of ORDER_IDs}
+```
+
+## Edge Cases
+- Order confirmed between reminder and cancellation (Status changed to "confirmed") — skip it, it won't match the "pending" filter
+- Google Sheets API error mid-batch — stop processing, alert operator with what succeeded and what remains
+- Phone number not on WhatsApp — log to SYSTEM_LOG.md, include in operator summary as "DM failed"
+- Partial batch failure — some orders cancelled, some not — report exactly which succeeded and which failed
+
+## Rules
+- NEVER cancel orders with Status = "confirmed". Only `pending` orders are eligible.
+- NEVER delete rows from the Orders sheet. Always use status changes.
+- NEVER cancel orders from previous weeks. Current week only (match Week column).
+- NEVER send messages to the WhatsApp group. DMs only.
+
+## Output
+Pending orders updated to cancelled in Orders sheet. Cancellation DMs sent to affected customers. Operator summary via Telegram. Log entry written.
+```
+
+**4.11 — Backup Automation Skill**
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills/backup
@@ -1453,10 +2152,31 @@ Thumbs.db
 
 Use OpenClaw's built-in CRON system rather than raw system crontab:
 ```bash
+# System event jobs (session=main, exec access)
 openclaw cron add --name "daily-backup" --schedule "59 23 * * *" --command "bash ~/scripts/daily_backup.sh"
 openclaw cron add --name "hourly-checkpoint" --schedule "0 * * * *" --command "bash -c 'cd ~/.openclaw/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
+
+# Order checkout — Tuesday 10:15 PM PT
+openclaw cron add --name "order-checkout" --cron "15 22 * * 2" --tz "America/Los_Angeles" --message "Run order-checkout skill: process all new form responses, generate orders, send DMs." --timeout-seconds 300
+
+# Payment reminder — Wednesday 10:00 AM PT
+openclaw cron add --name "payment-reminder" --cron "0 10 * * 3" --tz "America/Los_Angeles" --message "Run payment-reminder skill: send DM reminders to all unpaid pending orders for this week." --timeout-seconds 300
+
+# Auto-cancel — Wednesday 2:00 PM PT
+openclaw cron add --name "auto-cancel" --cron "0 14 * * 3" --tz "America/Los_Angeles" --message "Run auto-cancel skill: cancel all pending orders with unpaid status for this week." --timeout-seconds 300
+
+# Reporting
 openclaw cron add --name "weekly-report" --schedule "0 8 * * 0" --command "Read the Orders Google Sheet and send a Weekly Performance Report to my Telegram"
 openclaw cron add --name "daily-summary" --schedule "0 21 * * *" --command "Read today's orders from the Orders Google Sheet and send a Daily Summary to my Telegram"
+
+# Monday config reminder — Monday 9:00 PM PT
+openclaw cron add --name "monday-config-reminder" --cron "0 21 * * 1" --tz "America/Los_Angeles" --message "Send Telegram reminder to operator: Check Config sheet values (form_url, unit_price, venmo_handle, pickup_location) before Tuesday ordering window opens."
+
+# Tuesday form blast — Tuesday 9:00 AM PT
+openclaw cron add --name "tuesday-form-blast" --cron "0 9 * * 2" --tz "America/Los_Angeles" --message "Run weekly-order-blast skill: send Google Form ordering link to WhatsApp group." --timeout-seconds 300
+
+# Tuesday reminder — Tuesday 4:00 PM PT
+openclaw cron add --name "tuesday-reminder" --cron "0 16 * * 2" --tz "America/Los_Angeles" --message "Run weekly-order-blast skill: send deadline reminder to WhatsApp group." --timeout-seconds 300
 ```
 
 > **CRON Payload Cache Sync** — CRON job payloads are static: the `--message` or `--command` text is captured at registration time. Editing a skill file or script does NOT update the CRON payload. When you edit a skill that has a corresponding CRON job with inline instructions:
@@ -1476,26 +2196,36 @@ Create `~/.openclaw/workspace/SYSTEM_LOG.md`:
 # System Log
 
 ## Active CRON Jobs
-- daily-backup: 11:59 PM daily — ~/scripts/daily_backup.sh
+- daily-backup: 11:59 PM UTC daily — ~/scripts/daily_backup.sh
 - hourly-checkpoint: Top of every hour — git commit workspace changes (memory, logs, skill edits)
-- weekly-report: 8:00 AM Sundays — Orders sheet summary to Telegram
-- daily-summary: 9:00 PM daily — Today's order recap to Telegram
+- order-checkout: Tue 10:15 PM PT — batch process form responses, send Venmo DMs
+- payment-reminder: Wed 10:00 AM PT — DM unpaid customers with deadline warning
+- auto-cancel: Wed 2:00 PM PT — cancel unpaid orders, notify customers
+- daily-summary: 9:00 PM UTC daily — today's order recap to Telegram
+- weekly-report: Sun 8:00 AM UTC — weekly performance summary to Telegram
+- monday-config-reminder: Mon 9:00 PM PT — Telegram reminder to check Config sheet
+- tuesday-form-blast: Tue 9:00 AM PT — Google Form link to WhatsApp group
+- tuesday-reminder: Tue 4:00 PM PT — deadline reminder to WhatsApp group
 
 ## Data Backend
 - Orders: Google Sheets [ORDERS_SHEET_ID]
-- Inventory: Google Sheets [INVENTORY_SHEET_ID]
+- Config: Google Sheets [CONFIG_SHEET_ID]
 - Customers: Google Sheets [CUSTOMERS_SHEET_ID]
 
 ## Backup Script Path
 ~/scripts/daily_backup.sh
 
 ## Skills Installed
-- order-processing: WhatsApp order intake → Google Sheets
+- order-checkout: CRON batch checkout, Venmo DMs
 - customer-lookup: Search customer history from Sheets + memory
-- inventory-check: Product availability and pricing from Sheets
 - order-amendment: Modify/cancel orders in Sheets
+- payment-confirmation: Receive screenshots, delegate to main session
+- payment-verification: Main session reads screenshot, validates, updates sheet
 - weekly-report: Sunday performance summaries from Sheets
 - daily-summary: Nightly order recap from Sheets
+- weekly-order-blast: Tuesday form link + deadline reminder to WhatsApp group
+- payment-reminder: Wednesday DM reminders for unpaid orders
+- auto-cancel: Wednesday auto-cancellation of unpaid orders
 - backup: Nightly workspace backup to GitHub
 - gog (bundled CLI): Google Sheets, Gmail, Calendar, Drive, Contacts, Docs
 
@@ -1509,7 +2239,7 @@ Create `~/.openclaw/workspace/SYSTEM_LOG.md`:
 - [Date]: Google Sheets connected. Test read from Orders sheet confirmed.
 ```
 
-> **Note:** The `customers_orders.csv` and `inventory.md` files from the original setup are no longer needed as primary data stores. Google Sheets replaces them. Keep `inventory.md` as an optional local reference if you prefer, but the Inventory Google Sheet is the source of truth.
+> **Note:** The `customers_orders.csv` and `inventory.md` files from the original setup are no longer needed as primary data stores. Google Sheets replaces them. The Orders, Config, and Customers Google Sheets are the sources of truth.
 
 ---
 
@@ -1562,13 +2292,13 @@ claude --permission-mode dontAsk "Try to run: sudo apt update"
 # Should FAIL silently (sudo denied in .claude/settings.json)
 
 # 10. Verify Google Sheets connectivity (REQUIRES: Phase 2.5.3 OAuth completed)
-gog sheets read [ORDERS_SHEET_ID] "Sheet1!A1:G1"
-# Should return your header row: Name,Item,Quantity,Timestamp,Status,Channel,Notes
-gog sheets read [INVENTORY_SHEET_ID] "Sheet1!A1:D1"
+gog sheets read [ORDERS_SHEET_ID] "Sheet1!A1:K1"
+# Should return your header row: Name,Item,Quantity,Timestamp,Status,Channel,Notes,Order ID,Payment Status,Week,Venmo Confirmation ID
+gog sheets read [CONFIG_SHEET_ID] "Config!A2:B6"
 gog sheets read [CUSTOMERS_SHEET_ID] "Sheet1!A1:F1"
 
 # 11. Test a write to the Orders sheet (then delete the test row)
-gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:G" "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW"
+gog sheets append [ORDERS_SHEET_ID] "Sheet1!A:K" "TEST,TEST,0,2026-01-01 00:00,test,test,DELETE THIS ROW,TEST-000,test,W0000,"
 
 # 12. Run a test backup (REQUIRES: Phase 5.2 deploy key added to GitHub)
 bash ~/scripts/daily_backup.sh
@@ -1578,8 +2308,9 @@ openclaw cron list
 
 # 14. Verify skills are loaded and eligible
 openclaw skills list
-# Should show: order-processing, customer-lookup, inventory-check,
-#              order-amendment, weekly-report, daily-summary, backup
+# Should show 11 skills: order-checkout, customer-lookup, order-amendment,
+#   payment-confirmation, payment-verification, weekly-report, daily-summary,
+#   weekly-order-blast, payment-reminder, auto-cancel, backup
 
 # 15. Verify OpenClaw version (must be v2026.1.29+)
 openclaw --version
@@ -1650,13 +2381,13 @@ grep -A 5 '"sandbox"' ~/.openclaw/openclaw.json | grep -A 5 '"tools"'
 
 # 29. Send a test message via Telegram to confirm operator channel connectivity
 
-# 30. Send a test order via WhatsApp to verify the full order-processing flow:
-#     - @mention the bot with an item name and quantity
-#     - Item validated against Inventory sheet
-#     - Row appended to Orders sheet
+# 30. Verify the full order-checkout flow (CRON-triggered):
+#     - Submit a test Google Form response
+#     - Trigger order-checkout manually via Telegram: "Run order-checkout skill"
+#     - Row appended to Orders sheet with status "pending"
 #     - Customer record created/updated in Customers sheet
-#     - Confirmation message received (should include ONLY order details,
-#       not system info or other customers' data)
+#     - WhatsApp DM received with Venmo payment link
+#     - Send a test payment screenshot back to verify payment-confirmation flow
 
 # 31. Check context and model status
 # (Send /status via your messaging channel to the agent)
@@ -1764,7 +2495,7 @@ When you need to update skills — new products, changed workflows, seasonal adj
 
 - **Store in skills, not memory.** Skills are loaded deterministically on every matching turn. Memory is retrieved probabilistically and may not surface across sessions. If you want the agent to always follow a rule, put it in a SKILL.md — not in a conversation.
 - **Be specific.** Vague instructions fail. Include exact conditions ("when the customer says 'cancel'"), exact actions ("update column F to 'CANCELLED'"), exact formats ("reply with order ID, items, and refund amount"), and exact recipients ("confirm with the customer, then notify operator via Telegram").
-- **Cross-skill coordination must be explicit.** The agent won't infer that a new skill should hand off to an existing skill. If `order-amendment` needs to trigger `inventory-check` after modifying an order, add explicit handoff instructions in the `order-amendment` SKILL.md body (e.g., "After amending quantities, follow the Inventory Check workflow to verify stock levels").
+- **Cross-skill coordination must be explicit.** The agent won't infer that a new skill should hand off to an existing skill. The `payment-confirmation` → `payment-verification` delegation is a good example: `payment-confirmation` explicitly uses `sessions_send` to delegate to the main session, and `payment-verification` explicitly defines how to parse that notification. Without these explicit handoff instructions, the agent would not know how to coordinate between sandbox and main sessions.
 
 > **What the agent CAN modify (from operator Telegram DM only):**
 > - Skills: `skills/*/SKILL.md` — minor updates only (e.g., adding a product category). Agent will propose the change and wait for operator confirmation before writing.
@@ -1817,17 +2548,21 @@ When you need to update skills — new products, changed workflows, seasonal adj
 | **Channel plugins** | **`openclaw.json` → `plugins.entries`** | **Execution** | **Telegram and WhatsApp plugins enabled** |
 | Operator context + Sheet IDs | `USER.md` | Reasoning | Grounds agent in your business + data locations |
 | **Order data (source of truth)** | **Google Sheets → Orders** | **External** | **Persistent, shared, API-accessible via `gog sheets`** |
-| **Product catalog** | **Google Sheets → Inventory** | **External** | **Read-only for agent; operator manages stock** |
+| **Config sheet** | **Google Sheets → Config** | **External** | **form_url, unit_price, venmo_handle, pickup_location** |
 | **Customer directory** | **Google Sheets → Customers** | **External** | **Contact info, order counts, preferences** |
 | **Google Sheets CLI** | **`gog` (bundled CLI)** | **Bundled** | **Google Sheets via exec allowlist** |
 | **Google OAuth credentials** | **`~/.openclaw/credentials/` (chmod 600)** | **OS** | **Scoped to Sheets API only** |
-| Order processing workflow | `skills/order-processing/SKILL.md` | Specialization | Parse → validate → Sheets → confirm |
-| Customer lookup workflow | `skills/customer-lookup/SKILL.md` | Specialization | Search customer history from Sheets + memory |
-| Inventory check workflow | `skills/inventory-check/SKILL.md` | Specialization | Read-only product availability check |
-| Order amendment workflow | `skills/order-amendment/SKILL.md` | Specialization | Modify/cancel orders (never delete rows) |
-| Report generation workflow | `skills/weekly-report/SKILL.md` | Specialization | Consistent Sunday performance reports |
-| Daily recap workflow | `skills/daily-summary/SKILL.md` | Specialization | Nightly order + issue recap |
-| Backup workflow | `skills/backup/SKILL.md` | Specialization | Nightly workspace backup with verification |
+| Order checkout | `skills/order-checkout/SKILL.md` | Specialization | CRON Tue 10:15 PM PT — batch process form responses, send Venmo DMs |
+| Customer lookup | `skills/customer-lookup/SKILL.md` | Specialization | Agent/operator request — search customer history from Sheets + memory |
+| Order amendment | `skills/order-amendment/SKILL.md` | Specialization | Customer WhatsApp DM — modify/cancel orders (never delete rows) |
+| Payment confirmation | `skills/payment-confirmation/SKILL.md` | Specialization | Customer sends image in DM — delegate verification to main, poll for result |
+| Payment verification | `skills/payment-verification/SKILL.md` | Specialization | sessions_send from sandbox — read screenshot, validate, update sheet |
+| Weekly report | `skills/weekly-report/SKILL.md` | Specialization | CRON Sun 8:00 AM UTC — weekly stats to operator Telegram |
+| Daily summary | `skills/daily-summary/SKILL.md` | Specialization | CRON daily 9:00 PM UTC — daily recap to operator Telegram |
+| Weekly order blast | `skills/weekly-order-blast/SKILL.md` | Specialization | CRON Tue 9 AM + 4 PM PT — form link + deadline reminder to WhatsApp group |
+| Payment reminder | `skills/payment-reminder/SKILL.md` | Specialization | CRON Wed 10:00 AM PT — DM unpaid customers with deadline warning |
+| Auto-cancel | `skills/auto-cancel/SKILL.md` | Specialization | CRON Wed 2:00 PM PT — cancel unpaid orders, notify customers |
+| Backup | `skills/backup/SKILL.md` | Specialization | CRON daily 11:59 PM UTC — git backup to private repo |
 | Operational state | `SYSTEM_LOG.md` | Workspace | Audit trail |
 | Long-term context | `MEMORY.md` + `memory/` | Memory | Agent-managed recall (customer preferences) |
 | Proactive monitoring | `HEARTBEAT.md` | Scheduling | Hourly health checks (including Sheets API) |
