@@ -272,14 +272,17 @@ Instead of one monolithic prompt, distribute configuration across OpenClaw's pur
 | `[AGENT_NAME]` | Pick a name for your agent | IDENTITY.md, SOUL.md |
 | `[AGENT_PURPOSE]` | One-line description of what the agent does | SOUL.md |
 | `[AGENT_SPECIALIZATION]` | The agent's domain focus | SOUL.md |
+| `[AGENT_ROLE]` | The agent's functional role (e.g., "Business Operations Agent") | IDENTITY.md |
 | `[OPERATOR_NAME]` | Your name | USER.md, SOUL.md |
 | `[TIMEZONE]` | e.g., `America/New_York` | USER.md |
 | `[DATA_SHEET_ID]` | From your primary Google Sheet URL (between `/d/` and `/edit`) | SOUL.md, AGENTS.md, HEARTBEAT.md, USER.md, skills |
 | `[GROUP_JID]` | WhatsApp group JID — run `openclaw logs --follow`, send a message in the group, read the `from` field (format: `31640053449-1633552575@g.us`) | `openclaw.json` channels.whatsapp.groups |
-| `+OWNER_PHONE_NUMBER` | Your WhatsApp number in E.164 format (e.g., `+15551234567`) | `openclaw.json` channels.whatsapp.allowFrom |
-| `OWNER_TELEGRAM_USER_ID` | DM your Telegram bot → run `openclaw logs --follow` → read `from.id` (numeric), or DM `@userinfobot` on Telegram | `openclaw.json` channels.telegram.allowFrom |
+| `[OWNER_PHONE_NUMBER]` | Your WhatsApp number in E.164 format (e.g., `+15551234567`) — include the `+` prefix in the actual value | `openclaw.json` channels.whatsapp.allowFrom |
+| `[OWNER_TELEGRAM_USER_ID]` | DM your Telegram bot → run `openclaw logs --follow` → read `from.id` (numeric), or DM `@userinfobot` on Telegram | `openclaw.json` channels.telegram.allowFrom |
 | `[OPERATOR_TELEGRAM_ID]` | Same as above — numeric Telegram user ID | TOOLS.md, skills |
-| `[org]/[repo-name]` | Your private GitHub backup repo | USER.md, backup script |
+| `[BACKUP_REPO]` | Your private GitHub backup repo (e.g., `acme-corp/openclaw-backup`) | USER.md, backup script |
+| `[DEPLOY_DATE]` | Date of initial deployment (e.g., `2026-03-01`) | IDENTITY.md, SYSTEM_LOG.md |
+| `[VERSION]` | OpenClaw version at deployment (from `openclaw --version`) | SYSTEM_LOG.md |
 
 > **If using Claude Code:** Give it all these values in a single prompt and let it create all workspace files and skills in one session. Example: `"Create all OpenClaw workspace files using these values: Agent Name = MyBot, Purpose = customer support, Operator = Jane, Timezone = America/Chicago, Data Sheet ID = 1abc..., Backup Repo = acme-corp/openclaw-backup"`. This ensures consistency across all files.
 
@@ -484,7 +487,68 @@ Categories: BACKUP, ERROR, CRON, DEPLOY, CONFIG, SECURITY
 [DEPLOY_DATE] [DEPLOY] Initial deployment. OpenClaw [VERSION], gateway on localhost:18789.
 ```
 
-> If deploying a specific business agent, see the companion domain-specific setup guide for a complete example with workspace content, skills, and CRON jobs that replace the generic templates above.
+**3.8 — BOOT.md (Gateway Startup Checks)**
+
+```markdown
+# BOOT.md
+
+## On Gateway Startup
+
+Run these checks immediately after the gateway starts or restarts:
+
+1. Run `openclaw skills list` — verify all [N] skills loaded.
+   If any skill failed to load, log the error and alert operator.
+
+2. Run `openclaw cron list` — verify all [N] jobs are scheduled and enabled.
+   If any job is missing or disabled, alert operator.
+
+3. Check recent changes: run `git log --oneline -5 -- skills/ cron/`
+   If there are recent changes, include them in the startup summary.
+
+4. Run `openclaw memory status` — verify indexed file count > 0.
+   If memory index is empty (0 files), alert operator:
+   "Memory index is empty — run `openclaw memory index` to rebuild."
+
+5. Send a startup summary to operator Telegram:
+   "Gateway started. Skills: [N]/[N] loaded. Cron: [N]/[N] scheduled. Memory: [N] files indexed. Recent changes: [summary or 'none']"
+
+## Do NOT
+- Process domain operations or send customer-facing messages during boot checks.
+- Modify any files, sheets, or cron jobs.
+- Skip checks — always run all 5 steps even if the gateway restarted cleanly.
+```
+
+**3.9 — MEMORY.md (Long-Term Agent Memory)**
+
+```markdown
+# MEMORY.md — Long-Term Agent Memory
+
+## Data Sources
+- **Primary Data:** [DATA_SHEET_ID]
+
+## Skills ([N] total)
+[List your skills here after creating them in Phase 4]
+
+## CRON Schedule ([N] jobs)
+[List your CRON jobs here after registering them in Phase 5]
+
+## Operator Preferences
+- Operator: [OPERATOR_NAME], reachable via Telegram DM (trusted channel)
+- [Add operator preferences as you learn them]
+
+## Infrastructure
+- DigitalOcean Droplet, Ubuntu 24.04
+- OpenClaw gateway: localhost:18789, mode: local
+- Backups: nightly git push to private GitHub repo
+
+## Memory System
+- `MEMORY.md` — curated long-term facts, loaded every session
+- `memory/YYYY-MM-DD.md` — daily running logs, today + yesterday loaded at start
+- Search: `memory_search` (semantic) and `memory_get` (targeted reads)
+- Auto-indexed via SQLite hybrid search (vector + BM25)
+```
+
+> If deploying AsianovaBot, see [openclaw-asianovabot-setup.md](openclaw-asianovabot-setup.md) for workspace content, skills, and CRON jobs. For other deployments, replace the generic templates above with your domain-specific content.
 
 ---
 
@@ -607,7 +671,7 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
       "enabled": true,
       "dmPolicy": "pairing",
       "selfChatMode": true,
-      "allowFrom": ["+OWNER_PHONE_NUMBER"],
+      "allowFrom": ["[OWNER_PHONE_NUMBER]"],
       "groupPolicy": "disabled",
       "groups": {
         "[GROUP_JID]": {
@@ -629,7 +693,7 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
       "enabled": true,
       "dmPolicy": "pairing",
       "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "allowFrom": ["OWNER_TELEGRAM_USER_ID"],
+      "allowFrom": ["[OWNER_TELEGRAM_USER_ID]"],
       "groupPolicy": "disabled",
       "streaming": "off"
     }
@@ -824,7 +888,60 @@ chmod 600 ~/.openclaw/exec-approvals.json
 
 > **Three layers of exec scoping:** (1) `exec-approvals.json` allowlist — only specific binaries are permitted; all other exec attempts are silently denied (`ask: "off"`, `askFallback: "deny"`). (2) `safe-git.sh` wrapper — restricts git subcommands to `add`, `commit`, `push`, `status`, `log`, `diff`, `rev-parse`, `show` only; blocks `remote`, `config`, `reset`, etc. (3) `SOUL.md` + `TOOLS.md` + `AGENTS.md` — reasoning-level constraints on what the agent should exec and when. Layer 1 is the hard gate; layers 2-3 are defense-in-depth.
 
-**3.12 — Configure Claude Code Workspace Permissions**
+Create the `safe-git.sh` wrapper referenced in the allowlist:
+
+```bash
+mkdir -p ~/scripts
+cat > ~/scripts/safe-git.sh << 'EOF'
+#!/bin/bash
+# safe-git.sh — restrict git subcommands to a safe set
+# Only allow: add, commit, push, status, log, diff, rev-parse, show
+ALLOWED="add commit push status log diff rev-parse show"
+SUBCMD="${1:-}"
+if [ -z "$SUBCMD" ]; then
+  echo "Usage: safe-git.sh <subcommand> [args...]"
+  exit 1
+fi
+for allowed in $ALLOWED; do
+  if [ "$SUBCMD" = "$allowed" ]; then
+    exec /usr/bin/git "$@"
+  fi
+done
+echo "Blocked: git $SUBCMD is not in the allowed list ($ALLOWED)"
+exit 1
+EOF
+chmod +x ~/scripts/safe-git.sh
+```
+
+**3.12 — Create the `.env` Secrets File**
+
+All secrets are stored in a single `.env` file that OpenClaw auto-loads. Config files reference these via `${VAR_NAME}` interpolation:
+
+```bash
+cat > ~/.openclaw/.env << 'EOF'
+# Gateway
+GATEWAY_AUTH_TOKEN=<generate with: openssl rand -hex 32>
+
+# Messaging
+TELEGRAM_BOT_TOKEN=<from @BotFather>
+
+# AI Provider (at least one required)
+ANTHROPIC_API_KEY=<from console.anthropic.com>
+# GOOGLE_API_KEY=<from Google Cloud Console, if using Gemini fallback>
+
+# Google Sheets (required for gog CLI in agent sessions)
+GOG_ACCOUNT=<your Google account email>
+GOG_KEYRING_PASSWORD=<your keyring password>
+
+# Exec Approvals
+EXEC_APPROVALS_SOCKET_TOKEN=<generate with: openssl rand -hex 32>
+EOF
+chmod 600 ~/.openclaw/.env
+```
+
+> **Security:** The `.env` file has `chmod 600` — only `clawuser` can read it. Never commit it to git (it's in `.gitignore`). Never reference it in workspace files. The Gateway auto-loads it on startup.
+
+**3.13 — Configure Claude Code Workspace Permissions**
 
 Claude Code (installed in Phase 1.7) is used by the human operator only. Configure its permission rules for the OpenClaw workspace so that even interactive Claude Code sessions cannot damage critical files:
 
@@ -861,7 +978,7 @@ Create `~/.openclaw/workspace/CLAUDE.md`:
 ## Project: [AGENT_NAME]
 
 ### Key Commands
-- Google Sheets: `gog sheets read/update/append [SHEET_ID] [RANGE]`
+- Google Sheets: `gog sheets read/update/append [DATA_SHEET_ID] [RANGE]`
 - Git (restricted): `~/scripts/safe-git.sh [add|commit|push|status|log|diff]`
 
 ### Data Integrity Rules
@@ -1031,17 +1148,20 @@ This backup covers agent configuration, skills, memory, and operational logs.
 
 **5.1 — Create the Backup Script**
 
-Create `~/scripts/daily_backup.sh`:
+Create `~/scripts/daily_backup.sh` (the `~/scripts/` directory was created in Phase 3.11):
 ```bash
+cat > ~/scripts/daily_backup.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
 cd ~/.openclaw/workspace
 git add -A
 git commit -m "Auto-backup $(date +%Y-%m-%d_%H:%M)" || echo "No changes to commit"
 git push origin main
+EOF
+chmod +x ~/scripts/daily_backup.sh
 ```
 
-Make executable: `chmod +x ~/scripts/daily_backup.sh`
+> **Branch name:** This script pushes to `main`. If your backup repo uses a different default branch (e.g., `master`), change `main` accordingly.
 
 **5.2 — Set Up Git with SSH Deploy Keys (NOT Plaintext Credentials)**
 
@@ -1065,7 +1185,7 @@ Initialize the workspace as a git repo:
 ```bash
 cd ~/.openclaw/workspace
 git init
-git remote add origin git@github-backup:[org]/[repo-name].git
+git remote add origin git@github-backup:[BACKUP_REPO].git
 ```
 
 Create `~/.openclaw/workspace/.gitignore` to prevent committing sensitive or generated files:
@@ -1157,7 +1277,7 @@ Create `~/.openclaw/workspace/SYSTEM_LOG.md` (if not already created in Phase 3.
 
 | Item | Status |
 |------|--------|
-| All workspace files created (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, CLAUDE.md, SYSTEM_LOG.md) | |
+| All workspace files created (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, SYSTEM_LOG.md, BOOT.md, MEMORY.md, CLAUDE.md) | |
 | All skills created in `skills/` directories with valid YAML frontmatter | |
 | `openclaw.json` complete with all sections (auth, agents, tools, channels, gateway, cron, plugins) | |
 | `exec-approvals.json` created with allowlist entries | |
@@ -1367,7 +1487,7 @@ Setup is not a one-time event. Schedule these recurring maintenance tasks:
 - Review `memory/` files for suspicious content (memory poisoning indicator): `grep -r "ignore\|override\|new instructions\|act as" ~/.openclaw/workspace/memory/`
 - Check API usage at your provider's dashboard (Anthropic Console, OpenRouter, etc.).
 - Verify backups are arriving in the GitHub repo: `cd ~/.openclaw/workspace && git log --oneline -5`
-- Verify exec isolation holds: `grep '"exec"' ~/.openclaw/openclaw.json` (must be in deny list).
+- Verify exec is scoped via allowlist: `grep '"security"' ~/.openclaw/exec-approvals.json` (must show `"allowlist"`).
 - Verify email isolation holds: `grep '"email_send"' ~/.openclaw/openclaw.json` (must be in deny list).
 - Audit approved pairings: `openclaw pairing list --approved whatsapp` and `openclaw pairing list --approved telegram`. Remove any unrecognized contacts. Note: previously approved pairings persist in `~/.openclaw/credentials/` and survive config changes.
 - Review session logs for denied tool attempts: `grep -r "email_send\|exec\|gateway_config" ~/.openclaw/agents/*/sessions/` — any hits indicate injection attempts.
