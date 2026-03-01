@@ -19,7 +19,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 
 ## Deployed Skills
 
-11 skills in `~/.openclaw/workspace/skills/`:
+13 skills in `~/.openclaw/workspace/skills/`:
 
 | Skill | Description |
 |-------|-------------|
@@ -34,6 +34,8 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 | `payment-reminder` | Wednesday 10 AM reminder DM for unpaid pending orders |
 | `auto-cancel` | Wednesday 2 PM auto-cancellation of unpaid pending orders |
 | `backup` | Git-based backup to `raywu/asianova-bot` |
+| `beta-signup-data-normalization` | Daily zip/phone enrichment + operator reminder for Ramen Egg Beta sheet |
+| `beta-invite` | Weekly WhatsApp DM with group invite link to approved beta signups |
 
 ## Order Status Lifecycle
 
@@ -68,7 +70,7 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
   - Boot and heartbeat checks verify memory index is non-empty
   - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
 
-## CRON Jobs (10 active)
+## CRON Jobs (12 active)
 
 | Job | Schedule | Session | Type |
 |-----|----------|---------|------|
@@ -82,6 +84,8 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 | `monday-config-reminder` | Mon 21:00 PT | isolated | agentTurn — Telegram reminder |
 | `tuesday-form-blast` | Tue 09:00 PT | isolated | agentTurn — WhatsApp group blast |
 | `tuesday-reminder` | Tue 16:00 PT | isolated | agentTurn — WhatsApp group reminder |
+| `beta-signup-data-normalization` | 08:00 PT daily | isolated | agentTurn — zip/phone enrichment + operator reminder |
+| `beta-invite` | Fri 14:00 PT | isolated | agentTurn — WhatsApp invite DMs to approved signups |
 
 - `systemEvent` jobs target `session=main` (need exec access)
 - `agentTurn` jobs use `isolated` sessions with delivery announcements
