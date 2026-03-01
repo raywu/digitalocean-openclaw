@@ -548,7 +548,7 @@ Run these checks immediately after the gateway starts or restarts:
 - Auto-indexed via SQLite hybrid search (vector + BM25)
 ```
 
-> If deploying AsianovaBot, see [openclaw-asianovabot-setup.md](openclaw-asianovabot-setup.md) for workspace content, skills, and CRON jobs. For other deployments, replace the generic templates above with your domain-specific content.
+> **Customization:** Replace the generic templates above with your domain-specific content — workspace identity, skills, CRON jobs, and data models. Consider creating a separate companion doc for your deployment's business-specific configuration.
 
 ---
 

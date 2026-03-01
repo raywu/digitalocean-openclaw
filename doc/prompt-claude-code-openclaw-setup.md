@@ -2,7 +2,7 @@
 
 > **What this is:** A generic prompt to paste into Claude Code on your DigitalOcean Droplet. It walks you through the complete OpenClaw setup, broken into 15 discrete task blocks. Claude Code executes automatable steps and pauses at human-required gates.
 >
-> **This is a generic template.** Customize the `BUSINESS VALUES` placeholders for your specific deployment. For an example of a fully customized deployment with 13 skills and 12 CRON jobs, see [openclaw-asianovabot-setup.md](openclaw-asianovabot-setup.md).
+> **This is a generic template.** Customize the `BUSINESS VALUES` placeholders for your specific deployment. For production deployments, create a separate companion doc with your domain-specific skills, CRON jobs, and workspace content.
 >
 > **Prerequisites assumed complete:**
 > - DigitalOcean Droplet (Ubuntu 24.04) provisioned with SSH key auth
@@ -1340,4 +1340,4 @@ Begin with Task 1. Ask me for any missing business values before creating files.
 
 **Summary:** 8 fully automated tasks, 6 partially automated (1–2 pauses each), 1 fully manual. Total human gates: 9 across the entire setup.
 
-**For domain-specific deployments:** Replace the 2 example skills with your own domain skills, add corresponding CRON jobs, and customize the workspace files with your specific data structures. For a fully worked example with 13 skills, 12 CRON jobs, and complete business configuration, see [openclaw-asianovabot-setup.md](openclaw-asianovabot-setup.md).
+**For domain-specific deployments:** Replace the 2 example skills with your own domain skills, add corresponding CRON jobs, and customize the workspace files with your specific data structures. Create a separate companion doc for your deployment's business-specific configuration.

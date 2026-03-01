@@ -4,14 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a documentation repository for a **live deployed** OpenClaw instance (open-source, self-hosted AI agent framework) running on DigitalOcean infrastructure. There is no application code, build system, or test suite.
+This is a documentation repository for the **OpenClaw** open-source, self-hosted AI agent framework — specifically, deployment guides and reference material for running OpenClaw on DigitalOcean infrastructure. There is no application code, build system, or test suite.
 
 ### Document Structure (`doc/`)
 
-**Core (v3 — generic OpenClaw platform):**
+**Core:**
 - **`openclaw-setup-guide.md`** — Generic deployment walkthrough for Ubuntu 24.04 on DigitalOcean (vanilla OpenClaw, no business-specific content)
 - **`prompt-claude-code-openclaw-setup.md`** — Generic Claude Code prompt for guided setup (mirrors the setup guide)
-- **`openclaw-asianovabot-setup.md`** — AsianovaBot companion: all business-specific workspace content, 13 skills, 12 CRON jobs, Google Sheets data model, payment delegation
 
 **Other:**
 - **`prompt-multi-agent-openclaw-setup.md`** — Multi-agent orchestration prompt (pre-v3, not yet updated)
@@ -45,10 +44,6 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
   - Boot and heartbeat checks verify memory index is non-empty
   - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
 
-## AsianovaBot Deployment
-
-All business-specific details (13 skills, 12 CRON jobs, order lifecycle, Venmo payment flow, Google Sheets data model) are documented in `doc/openclaw-asianovabot-setup.md`. The generic platform docs (`openclaw-setup-guide.md`, `prompt-claude-code-openclaw-setup.md`) contain no AsianovaBot-specific content.
-
 ## Git
 
 - Only `master` branch (no `main`)
@@ -62,5 +57,5 @@ All business-specific details (13 skills, 12 CRON jobs, order lifecycle, Venmo p
 - Keep the security-first posture — every recommendation should consider both specialization and constraint
 - Infrastructure references target Ubuntu 24.04 + DigitalOcean Premium AMD Droplets
 - Generic platform docs use `[PLACEHOLDER]` format for customizable values
-- AsianovaBot-specific content belongs in `openclaw-asianovabot-setup.md`, not the generic docs
+- Deployment-specific content (skills, CRON jobs, business logic) belongs in a separate companion doc, not in the generic platform docs
 - Always use `gog sheets` — never `gsheet`
