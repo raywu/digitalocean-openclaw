@@ -377,6 +377,8 @@ cat > ~/.openclaw/workspace/AGENTS.md << 'SKILLEOF'
   send to operator Telegram
 - Hourly checkpoint: every hour — run ~/scripts/hourly_checkpoint.sh
 - Monday config reminder: 9:00 PM PT — remind operator to review Config sheet before Tuesday cycle
+- Beta signup data normalization: daily 8:00 AM PT — zip/phone enrichment + operator reminder for Beta sheet
+- Beta invite: Fridays 2:00 PM PT — WhatsApp DM with group invite link to approved beta signups
 SKILLEOF
 ```
 
@@ -485,14 +487,17 @@ every: "1h"
 5. Extract form_responses_sheet_url from the Config sheet response (row where column A = "form_responses_sheet_url", value in column B). Extract the sheet ID from the URL (the segment between `/d/` and the next `/`).
 6. Verify Form Responses sheet connectivity: run `gog sheets read {extracted_sheet_id} "A1:A1"`
    and confirm it returns data. If auth fails, alert immediately.
-7. Run `openclaw skills list` and verify all 10 skills are loaded:
-   auto-cancel, backup, customer-lookup, daily-summary, order-amendment, order-checkout,
-   payment-confirmation, payment-reminder, weekly-order-blast, weekly-report.
+7. Run `openclaw skills list` and verify all 13 skills are loaded:
+   auto-cancel, backup, beta-invite, beta-signup-data-normalization,
+   customer-lookup, daily-summary, order-amendment, order-checkout,
+   payment-confirmation, payment-reminder, payment-verification,
+   weekly-order-blast, weekly-report.
    If any skill is missing or an unexpected skill appears, alert:
-   "Heartbeat Alert: Skill mismatch — expected 10, got [N]. Missing: [list]"
-8. Run `openclaw cron list` and verify all 10 jobs are present and enabled:
+   "Heartbeat Alert: Skill mismatch — expected 13, got [N]. Missing: [list]"
+8. Run `openclaw cron list` and verify all 12 jobs are present and enabled:
    daily-backup, hourly-checkpoint, weekly-report, daily-summary,
-   order-checkout, payment-reminder, auto-cancel, monday-config-reminder, tuesday-form-blast, tuesday-reminder.
+   order-checkout, payment-reminder, auto-cancel, monday-config-reminder,
+   tuesday-form-blast, tuesday-reminder, beta-signup-data-normalization, beta-invite.
    If any job is missing, disabled, or unexpected, alert:
    "Heartbeat Alert: Cron mismatch — [describe issue]"
 9. Run `openclaw memory status` — verify indexed file count > 0.
@@ -519,14 +524,17 @@ cat > ~/.openclaw/workspace/BOOT.md << 'SKILLEOF'
 
 Run these checks immediately after the gateway starts or restarts:
 
-1. Run `openclaw skills list` — verify all 8 skills loaded:
-   backup, customer-lookup, daily-summary, order-amendment, order-checkout,
-   payment-confirmation, weekly-order-blast, weekly-report.
+1. Run `openclaw skills list` — verify all 13 skills loaded:
+   auto-cancel, backup, beta-invite, beta-signup-data-normalization,
+   customer-lookup, daily-summary, order-amendment, order-checkout,
+   payment-confirmation, payment-reminder, payment-verification,
+   weekly-order-blast, weekly-report.
    If any skill failed to load, log the error and alert operator.
 
-2. Run `openclaw cron list` — verify all 8 jobs are scheduled and enabled:
+2. Run `openclaw cron list` — verify all 12 jobs are scheduled and enabled:
    daily-backup, hourly-checkpoint, weekly-report, daily-summary,
-   order-checkout, monday-config-reminder, tuesday-form-blast, tuesday-reminder.
+   order-checkout, monday-config-reminder, tuesday-form-blast, tuesday-reminder,
+   payment-reminder, auto-cancel, beta-signup-data-normalization, beta-invite.
    If any job is missing or disabled, alert operator.
 
 3. Check recent changes: run `git log --oneline -5 -- skills/ cron/`
@@ -537,7 +545,7 @@ Run these checks immediately after the gateway starts or restarts:
    "Memory index is empty — run `openclaw memory index` to rebuild."
 
 5. Send a startup summary to operator Telegram:
-   "Gateway started. Skills: [N]/8 loaded. Cron: [N]/8 scheduled. Memory: [N] files indexed. Recent changes: [summary or 'none']"
+   "Gateway started. Skills: [N]/13 loaded. Cron: [N]/12 scheduled. Memory: [N] files indexed. Recent changes: [summary or 'none']"
 
 ## Do NOT
 - Process orders or send customer-facing messages during boot checks.
@@ -558,10 +566,10 @@ cat > ~/.openclaw/workspace/MEMORY.md << 'SKILLEOF'
 - **Customers:** `142rVcYSk3JTEU4YHLR3M9_yKKtUjPJZ2lbwvUzVZokc`
 - **Form Responses:** URL from Config sheet (key: `form_responses_sheet_url`)
 
-## Skills (10 total)
-auto-cancel, backup, customer-lookup, daily-summary, order-amendment, order-checkout, payment-confirmation, payment-reminder, weekly-order-blast, weekly-report
+## Skills (13 total)
+auto-cancel, backup, beta-invite, beta-signup-data-normalization, customer-lookup, daily-summary, order-amendment, order-checkout, payment-confirmation, payment-reminder, payment-verification, weekly-order-blast, weekly-report
 
-## CRON Schedule (10 jobs)
+## CRON Schedule (12 jobs)
 - `daily-backup` — nightly backup via safe-git.sh
 - `hourly-checkpoint` — hourly cron snapshot to workspace/cron/jobs.json
 - `weekly-report` — weekly aggregate report
@@ -572,6 +580,8 @@ auto-cancel, backup, customer-lookup, daily-summary, order-amendment, order-chec
 - `monday-config-reminder` — remind operator to verify config
 - `tuesday-form-blast` — 9 AM ordering form link to WhatsApp group
 - `tuesday-reminder` — 4 PM deadline reminder to WhatsApp group
+- `beta-signup-data-normalization` — daily 8 AM PT, zip/phone enrichment for Beta sheet
+- `beta-invite` — Fri 2 PM PT, WhatsApp invite DMs to approved beta signups
 
 ## Order Lifecycle
 `pending` (at checkout) -> `confirmed` (after payment-confirmation verifies screenshot)
@@ -614,7 +624,7 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - **OpenClaw Gateway:** Runs as a persistent daemon on localhost:18789
 - **Config:** ~/.openclaw/openclaw.json (contains API keys — NEVER modify)
 - **Workspace:** This directory (~/.openclaw/workspace/)
-- **Data backend:** Google Sheets (Orders, Form Responses, Customers)
+- **Data backend:** Google Sheets (Orders, Form Responses, Customers, Beta Responses)
   accessed via gog CLI
 - **Messaging:** WhatsApp (group announcements + customer DMs), Telegram (operator alerts/reports)
 - **Backups:** Nightly git push to private GitHub repo via ~/scripts/daily_backup.sh
@@ -629,9 +639,32 @@ orders via WhatsApp and Telegram, with data stored in Google Sheets.
 - BOOT.md — Gateway startup verification checklist
 - SYSTEM_LOG.md — Operational audit trail
 - cron/jobs.json — Version-controlled snapshot of OpenClaw cron jobs (auto-copied by hourly checkpoint)
-- skills/ — Custom SKILL.md files for order-processing, reports, etc.
+- skills/ — 13 SKILL.md files (order lifecycle, payment, reports, beta enrichment/invite, backup)
 - memory/ — Agent memory files (daily + long-term)
 - MEMORY.md — Curated long-term facts, loaded every session, indexed for search
+
+## Deployed Skills
+
+| Skill | Description |
+|-------|-------------|
+| `order-checkout` | CRON-triggered batch checkout, sends DMs with Venmo links |
+| `payment-confirmation` | Receives screenshots in WhatsApp DM, delegates to main via `sessions_send`, polls for result |
+| `payment-verification` | Main-session skill: reads payment screenshot from disk, validates amount, updates Orders sheet |
+| `customer-lookup` | Looks up customer info from Google Sheets |
+| `order-amendment` | Handles order modifications before cutoff |
+| `daily-summary` | Daily order stats (pending/paid/cancelled) |
+| `weekly-report` | Weekly aggregate reporting |
+| `weekly-order-blast` | Saturday pickup blast to group chat |
+| `payment-reminder` | Wednesday 10 AM reminder DM for unpaid pending orders |
+| `auto-cancel` | Wednesday 2 PM auto-cancellation of unpaid pending orders |
+| `backup` | Git-based backup to `raywu/asianova-bot` |
+| `beta-signup-data-normalization` | Daily zip/phone enrichment + operator reminder for Ramen Egg Beta sheet |
+| `beta-invite` | Weekly WhatsApp DM with group invite link to approved beta signups |
+
+## Order Status Lifecycle
+
+`pending` (at checkout) → `confirmed` (after payment verified) → pickup
+`pending` → `cancelled` (auto-cancel Wed 2 PM PT, or manual)
 
 ## Memory System (active since 2026-02-28)
 - **MEMORY.md** — Curated long-term facts (sheet IDs, skills, preferences). Loaded every session.
