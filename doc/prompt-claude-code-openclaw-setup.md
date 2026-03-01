@@ -40,14 +40,16 @@ I will give you my business values in the format below. Ask me for any I haven't
 BUSINESS VALUES (I'll fill these in — leave as placeholders if I haven't provided yet):
 - Agent Name: ___
 - Agent Purpose: ___
+- Agent Role: ___
 - Operator Name: ___
 - Timezone: ___
 - Primary Data Sheet ID: ___
 - Additional Sheet IDs (as needed): ___
 - WhatsApp Group Name: ___
 - WhatsApp Group JID: ___
+- Owner Phone Number (E.164, e.g. +15551234567): ___
 - Operator Telegram User ID: ___
-- GitHub Backup Repo (org/repo): ___
+- GitHub Backup Repo (e.g. acme-corp/openclaw-backup): ___
 - Gateway Auth Token: ___
 
 Execute the following 15 task blocks in order. Each block maps to a specific part of the setup guide.
@@ -331,6 +333,9 @@ You are not a general-purpose assistant — stay within your domain.
 # IDENTITY.md
 - **Name:** [AGENT_NAME]
 - **Role:** [AGENT_ROLE]
+- **Operator:** [OPERATOR_NAME]
+- **Version:** 1.0
+- **Deployed:** [DEPLOY_DATE]
 - **Communication Style:** Professional, concise, proactive. Reports use
   structured formats with clear headers. Asks for clarification when
   details are ambiguous. Never uses casual language in user-facing messages.
@@ -339,7 +344,7 @@ You are not a general-purpose assistant — stay within your domain.
 Show me both files after creation so I can verify.
 
 ═══════════════════════════════════════════════════════════
-TASK 5: Create Remaining Workspace Files (AGENTS, TOOLS, USER, HEARTBEAT, BOOT, SYSTEM_LOG)
+TASK 5: Create Remaining Workspace Files (AGENTS, TOOLS, USER, HEARTBEAT, BOOT, SYSTEM_LOG, MEMORY)
 ═══════════════════════════════════════════════════════════
 
 Phase 3.3–3.6 — Create these files with EXACT content:
@@ -438,7 +443,7 @@ Phase 3.3–3.6 — Create these files with EXACT content:
 - Agent purpose: [AGENT_PURPOSE]
 - Primary channel: Telegram (for alerts and reports)
 - WhatsApp group: [GROUP_NAME] (for user-facing interactions)
-- Backup repo: github.com/[ORG]/[REPO] (private, agent has write access)
+- Backup repo: github.com/[BACKUP_REPO] (private, agent has write access)
 - Timezone: [TIMEZONE]
 - Preferences: Concise reports, no unnecessary preamble.
 
@@ -529,9 +534,39 @@ If any workspace file is missing or corrupt:
 - Revoke at: Google Account → Security → Third-party apps → find project
 
 ## Initialization
-- [Date]: Agent initialized. Test backup completed successfully.
-- [Date]: Google Sheets connected. Test read confirmed.
+- [DEPLOY_DATE]: Agent initialized. Test backup completed successfully.
+- [DEPLOY_DATE]: Google Sheets connected. Test read confirmed.
 ---END SYSTEM_LOG.md---
+
+7. Create ~/.openclaw/workspace/MEMORY.md:
+
+---BEGIN MEMORY.md---
+# MEMORY.md — Long-Term Agent Memory
+
+## Data Sources
+- **Primary Data:** [DATA_SHEET_ID]
+
+## Skills
+[List your skills here after creating them in Task 10]
+
+## CRON Schedule
+[List your CRON jobs here after registering them in Task 12]
+
+## Operator Preferences
+- Operator: [OPERATOR_NAME], reachable via Telegram DM (trusted channel)
+- [Add operator preferences as you learn them]
+
+## Infrastructure
+- DigitalOcean Droplet, Ubuntu 24.04
+- OpenClaw gateway: localhost:18789, mode: local
+- Backups: nightly git push to private GitHub repo
+
+## Memory System
+- `MEMORY.md` — curated long-term facts, loaded every session
+- `memory/YYYY-MM-DD.md` — daily running logs, today + yesterday loaded at start
+- Search: `memory_search` (semantic) and `memory_get` (targeted reads)
+- Auto-indexed via SQLite hybrid search (vector + BM25)
+---END MEMORY.md---
 
 Show me all files after creation.
 
@@ -594,7 +629,7 @@ Phase 3b (3.8) — This is the COMPLETE openclaw.json. It REPLACES any earlier p
       {
         "id": "main",
         "groupChat": {
-          "mentionPatterns": ["@[AGENT_NAME_LOWERCASE]", "[AGENT_NAME_LOWERCASE]"]
+          "mentionPatterns": ["@[AGENT_NAME]", "[AGENT_NAME]"]
         }
       }
     ]
@@ -652,6 +687,7 @@ Phase 3b (3.8) — This is the COMPLETE openclaw.json. It REPLACES any earlier p
       "enabled": true,
       "dmPolicy": "[DM_POLICY]",
       "selfChatMode": true,
+      "allowFrom": ["[OWNER_PHONE_NUMBER]"],
       "groupPolicy": "disabled",
       "groups": {
         "[GROUP_JID]": {
@@ -787,15 +823,6 @@ Phase 3.11 — Create ~/.openclaw/exec-approvals.json with this EXACT content:
         },
         {
           "pattern": "/home/clawuser/scripts/safe-git.sh"
-        },
-        {
-          "pattern": "/home/clawuser/.local/bin/gsheet"
-        },
-        {
-          "pattern": "/home/clawuser/scripts/daily_backup.sh"
-        },
-        {
-          "pattern": "/home/clawuser/scripts/hourly_checkpoint.sh"
         }
       ]
     }
@@ -803,9 +830,54 @@ Phase 3.11 — Create ~/.openclaw/exec-approvals.json with this EXACT content:
 }
 ---END exec-approvals.json---
 
-The gsheet entry is a silent shim (redirects to gog sheets) — safety net for hallucinated tool names.
+Add additional entries to the allowlist as needed for your domain (e.g., backup scripts, custom tooling). Each entry should be the resolved absolute path to the binary.
 
 chmod 600 ~/.openclaw/exec-approvals.json
+
+Create the safe-git.sh wrapper referenced in the allowlist:
+
+mkdir -p ~/scripts
+cat > ~/scripts/safe-git.sh << 'EOF'
+#!/bin/bash
+ALLOWED="add commit push status log diff rev-parse show"
+SUBCMD="${1:-}"
+if [ -z "$SUBCMD" ]; then
+  echo "Usage: safe-git.sh <subcommand> [args...]"
+  exit 1
+fi
+for allowed in $ALLOWED; do
+  if [ "$SUBCMD" = "$allowed" ]; then
+    exec /usr/bin/git "$@"
+  fi
+done
+echo "Blocked: git $SUBCMD is not in the allowed list ($ALLOWED)"
+exit 1
+EOF
+chmod +x ~/scripts/safe-git.sh
+
+Create the .env secrets file (all config files reference these via ${VAR_NAME} interpolation):
+
+cat > ~/.openclaw/.env << 'EOF'
+# Gateway
+GATEWAY_AUTH_TOKEN=<generate with: openssl rand -hex 32>
+
+# Messaging
+TELEGRAM_BOT_TOKEN=<from @BotFather>
+
+# AI Provider (at least one required)
+ANTHROPIC_API_KEY=<from console.anthropic.com>
+# GOOGLE_API_KEY=<from Google Cloud Console, if using Gemini fallback>
+
+# Google Sheets (required for gog CLI in agent sessions)
+GOG_ACCOUNT=<your Google account email>
+GOG_KEYRING_PASSWORD=<your keyring password>
+
+# Exec Approvals
+EXEC_APPROVALS_SOCKET_TOKEN=<generate with: openssl rand -hex 32>
+EOF
+chmod 600 ~/.openclaw/.env
+
+🛑 HUMAN GATE: Fill in the actual values in ~/.openclaw/.env. Show me the file (with secrets masked) to confirm all variables are set.
 
 Phase 3.10 addendum — Secrets management:
 Run the secrets CLI to audit and harden credentials:
@@ -1083,7 +1155,7 @@ Phase 5.2 — SSH deploy key:
 7. Initialize workspace git repo:
    cd ~/.openclaw/workspace
    git init
-   git remote add origin git@github-backup:[ORG]/[REPO].git
+   git remote add origin git@github-backup:[BACKUP_REPO].git
 
 8. Create ~/.openclaw/workspace/.gitignore:
 
@@ -1232,14 +1304,14 @@ SETUP COMPLETE
 ═══════════════════════════════════════════════════════════
 
 After all 15 tasks pass, confirm:
-- Total workspace files created: 8 (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md, SYSTEM_LOG.md)
+- Total workspace files created: 10 (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md, SYSTEM_LOG.md, MEMORY.md, CLAUDE.md)
 - Total example skills created: 3 (daily-greeting, data-lookup, backup)
-- Config files: openclaw.json, exec-approvals.json, .claude/settings.json, CLAUDE.md
-- Support files: .gitignore, daily_backup.sh
+- Config files: openclaw.json, exec-approvals.json, .env, .claude/settings.json
+- Support files: .gitignore, daily_backup.sh, safe-git.sh
 - CRON jobs: 3 (daily-backup, hourly-checkpoint, daily-greeting)
 - Git repo initialized and pushed
 
-Total: 15 files + 3 CRON jobs
+Total: 18 files + 3 CRON jobs
 
 Begin with Task 1. Ask me for any missing business values before creating files.
 ```
@@ -1254,10 +1326,10 @@ Begin with Task 1. Ask me for any missing business values before creating files.
 | 2 | Connect messaging channels | 2.4 | Partial | BotFather token, WhatsApp QR scan |
 | 3 | Google Sheets skill + OAuth | 2.5 | Partial | Google Cloud console, OAuth flow, create sheets |
 | 4 | SOUL.md + IDENTITY.md | 3.1–3.2 | Full | None (values collected upfront) |
-| 5 | AGENTS.md + TOOLS.md + USER.md + HEARTBEAT.md + BOOT.md + SYSTEM_LOG.md | 3.3–3.6 | Full | None |
+| 5 | AGENTS.md + TOOLS.md + USER.md + HEARTBEAT.md + BOOT.md + SYSTEM_LOG.md + MEMORY.md | 3.3–3.9 | Full | None |
 | 6 | Complete openclaw.json | 3.8 | Full | None (replaces earlier partial configs) |
 | 7 | Build sandbox Docker image | 3.9 | Full | None |
-| 8 | File permissions + exec-approvals.json | 3.10–3.11 | Full | None |
+| 8 | File permissions + exec-approvals + safe-git.sh + .env | 3.10–3.12 | Partial | Fill in .env secrets |
 | 9 | Claude Code workspace permissions | 3.12 | Full | None |
 | 10 | 2 example skills + backup skill | 4 | Full | None |
 | 11 | Backup script + SSH deploy key + git init | 5.1–5.2 | Partial | Add deploy key to GitHub |
