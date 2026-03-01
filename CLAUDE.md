@@ -19,12 +19,13 @@ This is a documentation repository for a **live deployed** OpenClaw instance (op
 
 ## Deployed Skills
 
-10 skills in `~/.openclaw/workspace/skills/`:
+11 skills in `~/.openclaw/workspace/skills/`:
 
 | Skill | Description |
 |-------|-------------|
 | `order-checkout` | CRON-triggered batch checkout, sends DMs with Venmo links |
-| `payment-confirmation` | Verifies payment screenshots, updates status to `confirmed` |
+| `payment-confirmation` | Receives screenshots in WhatsApp DM, delegates to main via `sessions_send`, polls for result |
+| `payment-verification` | Main-session skill: reads payment screenshot from disk, validates amount, updates Orders sheet |
 | `customer-lookup` | Looks up customer info from Google Sheets |
 | `order-amendment` | Handles order modifications before cutoff |
 | `daily-summary` | Daily order stats (pending/paid/cancelled) |
