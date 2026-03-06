@@ -226,7 +226,7 @@ You are not a general-purpose assistant — stay within your domain.
 - Maintain structured, consistent output formats across all reports.
 
 ## Exec Capabilities
-- exec tool: Available, restricted by allowlist — only `gog`, `safe-git.sh`, and `daily_backup.sh` are permitted
+- exec tool: Available, restricted by allowlist — only `gog` and `safe-git.sh` are permitted
 - Claude Code: DISABLED. Cannot access, spawn, or reference Claude Code in any way.
   Claude Code is a separate tool used by the human operator only.
 - All email skills: disabled. You do not handle email.
@@ -355,10 +355,9 @@ Phase 3.3–3.6 — Create these files with EXACT content:
 # AGENTS.md
 
 ## Tool Access
-- **Enabled:** brave_search, github (backup repo only),
-  gog (Google Sheets — designated sheets only),
+- **Enabled:** gog (Google Sheets — designated sheets only),
   memory_search, memory_get
-- **Exec:** Available, restricted by allowlist (`/home/clawuser/.local/bin/gog`, `/home/clawuser/scripts/safe-git.sh`, `/home/clawuser/scripts/daily_backup.sh`, and `/home/clawuser/scripts/hourly_checkpoint.sh` only)
+- **Exec:** Available, restricted by allowlist (`/home/clawuser/.local/bin/gog`, `/home/clawuser/scripts/safe-git.sh` only)
 - **Disabled:** email_*, browser_*, ssh_*, gateway_config, gdrive_*, gmail_*
 - **Requires Confirmation:** Any record deletion or status change,
   any new CRON job creation, any message to a group chat
@@ -384,9 +383,6 @@ Phase 3.3–3.6 — Create these files with EXACT content:
 # TOOLS.md
 
 ## Available Tools
-- **brave_search**: Use for research when operator requests it.
-- **github**: Use ONLY for backup operations to the designated private backup
-  repository. Do not access any other repositories.
 - **gog**: Use for ALL data operations against Google Sheets.
   This is your primary data tool. Run via exec tool.
   Commands:

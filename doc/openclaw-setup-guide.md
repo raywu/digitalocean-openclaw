@@ -1214,11 +1214,11 @@ Use OpenClaw's built-in CRON system rather than raw system crontab. Below are th
 
 ```bash
 # System event jobs (session=main, exec access)
-openclaw cron add --name "daily-backup" --schedule "59 23 * * *" --command "bash ~/scripts/daily_backup.sh"
-openclaw cron add --name "hourly-checkpoint" --schedule "0 * * * *" --command "bash -c 'cd ~/.openclaw/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
+openclaw cron add --name "daily-backup" --cron "59 23 * * *" --message "bash ~/scripts/daily_backup.sh"
+openclaw cron add --name "hourly-checkpoint" --cron "0 * * * *" --message "bash -c 'cd ~/.openclaw/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
 
 # Example: Daily greeting — every day at 9:00 AM UTC
-openclaw cron add --name "daily-greeting" --schedule "0 9 * * *" --message "Run daily-greeting skill: send morning status to operator Telegram." --timeout-seconds 60
+openclaw cron add --name "daily-greeting" --cron "0 9 * * *" --tz "[TIMEZONE]" --message "Run daily-greeting skill: send morning status to operator Telegram." --timeout-seconds 60
 ```
 
 Add your own CRON jobs for domain-specific skills:
@@ -1226,8 +1226,8 @@ Add your own CRON jobs for domain-specific skills:
 # Template for agentTurn CRON jobs:
 # openclaw cron add --name "[JOB_NAME]" --cron "[CRON_EXPRESSION]" --tz "[TIMEZONE]" --message "[TRIGGER_MESSAGE]" --timeout-seconds [SECONDS]
 
-# Template for systemEvent CRON jobs (need exec access, run in main session):
-# openclaw cron add --name "[JOB_NAME]" --schedule "[CRON_EXPRESSION]" --command "[SHELL_COMMAND]"
+# Template for system-exec CRON jobs (need exec access, run in main session):
+# openclaw cron add --name "[JOB_NAME]" --cron "[CRON_EXPRESSION]" --message "[SHELL_COMMAND]"
 ```
 
 > **CRON Payload Cache Sync** — CRON job payloads are static: the `--message` or `--command` text is captured at registration time. Editing a skill file or script does NOT update the CRON payload. When you edit a skill that has a corresponding CRON job with inline instructions:
