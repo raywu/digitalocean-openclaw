@@ -263,7 +263,39 @@ Note each spreadsheet's ID from the URL (the long string between `/d/` and `/edi
 
 > **Bootstrap auto-generation:** On first run, OpenClaw seeds default workspace files (AGENTS.md, SOUL.md, TOOLS.md, IDENTITY.md, USER.md, HEARTBEAT.md) and runs a Q&A wizard via BOOTSTRAP.md. The custom files we create below **override** these defaults. If you see existing workspace files after `openclaw onboard`, that's expected — our files replace them entirely.
 
-Instead of one monolithic prompt, distribute configuration across OpenClaw's purpose-built workspace files in `~/.openclaw/workspace/`:
+#### DEV/PROD Workspace Architecture
+
+OpenClaw supports separate development and production workspaces. You edit and test in `workspace-dev/`, then promote changes to `workspace/` (which the Gateway reads). This keeps production stable while you iterate:
+
+```
+~/.openclaw/
+├── openclaw.json              # PROD config (port 18789, channels enabled)
+├── openclaw-dev.json          # DEV config (port 18790, no channels)
+├── .env                       # Shared secrets
+├── workspace/                 # PRODUCTION — Gateway reads from here
+│   ├── SOUL.md                #   deployed artifact, not edited directly
+│   ├── IDENTITY.md, AGENTS.md, TOOLS.md, USER.md
+│   ├── HEARTBEAT.md, BOOT.md
+│   ├── MEMORY.md              #   PROD-owned (agent writes)
+│   ├── memory/                #   PROD-owned
+│   ├── SYSTEM_LOG.md          #   PROD-owned
+│   └── skills/
+└── workspace-dev/             # DEV — git repo + Claude Code root
+    ├── .git/
+    ├── .claude/settings.json
+    ├── CLAUDE.md              #   dev-only, never promoted
+    ├── SOUL.md                #   source of truth — edit here
+    ├── IDENTITY.md, AGENTS.md, TOOLS.md, USER.md
+    ├── HEARTBEAT.md, BOOT.md
+    ├── skills/
+    ├── tests/
+    └── scripts/
+        └── promote.sh         #   rsync dev → prod
+```
+
+> **PROD-owned files** — `MEMORY.md`, `memory/`, and `SYSTEM_LOG.md` live only in `workspace/`. The running agent writes to these; they are never overwritten by promotion. `CLAUDE.md` is the opposite: it exists only in `workspace-dev/` to guide Claude Code during development and is never promoted to production.
+
+Instead of one monolithic prompt, distribute configuration across OpenClaw's purpose-built workspace files. Create all files in `~/.openclaw/workspace-dev/` — the dev workspace is the source of truth:
 
 **Before creating any files, collect these values. Every workspace file and skill references them:**
 
@@ -769,6 +801,24 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
 
 > **Write access asymmetry (important):** The main session (operator Telegram DM) runs on host and has `write`/`edit` tools available — the agent CAN modify workspace files (skills, memory, SYSTEM_LOG.md) when instructed by the operator. Sandboxed sessions (WhatsApp group, CRON) CANNOT modify workspace files (`workspaceAccess: "ro"` hard enforcement). SOUL.md contains self-modification rules that constrain when the agent should use its write access.
 
+**3.8b — Create the DEV Gateway Config**
+
+Copy `openclaw.json` and modify for development use:
+
+```bash
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw-dev.json
+```
+
+Edit `~/.openclaw/openclaw-dev.json` — change these three settings:
+
+1. **Workspace path:** `"workspace": "~/.openclaw/workspace-dev"`
+2. **Gateway port:** `"port": 18790`
+3. **Remove all channel config:** Delete the entire `channels` and `plugins` sections (Telegram, WhatsApp)
+
+> **Why a separate config?** DEV needs a temporary Gateway for testing CRON jobs and sandbox behavior. Using a different port (18790) prevents conflicts with the always-on PROD Gateway, and removing channels prevents DEV from accidentally responding to real users. Start DEV with: `openclaw start --config ~/.openclaw/openclaw-dev.json`. Stop when done testing.
+>
+> **SSH tunnel for DEV dashboard:** `ssh -L 18790:localhost:18790 clawuser@YOUR_DROPLET_IP` → open `http://localhost:18790`.
+
 **3.9 — Build the Sandbox Docker Image**
 
 The sandbox configuration in `openclaw.json` (under `agents.defaults.sandbox`) controls Docker-based isolation:
@@ -943,9 +993,9 @@ chmod 600 ~/.openclaw/.env
 
 **3.13 — Configure Claude Code Workspace Permissions**
 
-Claude Code (installed in Phase 1.7) is used by the human operator only. Configure its permission rules for the OpenClaw workspace so that even interactive Claude Code sessions cannot damage critical files:
+Claude Code (installed in Phase 1.7) is used by the human operator only. Configure its permission rules for the development workspace so that even interactive Claude Code sessions cannot damage critical files:
 
-Create `~/.openclaw/workspace/.claude/settings.json`:
+Create `~/.openclaw/workspace-dev/.claude/settings.json`:
 ```json
 {
   "permissions": {
@@ -971,7 +1021,7 @@ Create `~/.openclaw/workspace/.claude/settings.json`:
 
 This means: Claude Code can freely read/search everything (it needs full context). Destructive commands, config file edits, and secrets access are hard-blocked even if you accidentally approve them. All other actions (file edits, bash commands, git) use Normal mode — Claude Code asks you before each action.
 
-Create `~/.openclaw/workspace/CLAUDE.md`:
+Create `~/.openclaw/workspace-dev/CLAUDE.md`:
 ```markdown
 # CLAUDE.md
 
@@ -992,13 +1042,112 @@ Create `~/.openclaw/workspace/CLAUDE.md`:
 - Error escalation: Always notify operator via Telegram
 ```
 
-> **Claude Code users:** To use Claude Code for skill development, `tmux attach -t claude-code`, then `cd ~/.openclaw/workspace && claude`. Claude Code reads `CLAUDE.md` automatically for project context.
+> **Claude Code users:** To use Claude Code for skill development, `tmux attach -t claude-code`, then `cd ~/.openclaw/workspace-dev && claude`. Claude Code reads `CLAUDE.md` automatically for project context. Use `./scripts/promote.sh` to deploy changes to production.
+
+**3.14 — Initialize workspace-dev as a Git Repository**
+
+```bash
+cd ~/.openclaw/workspace-dev
+git init
+git add -A
+git commit -m "Initial workspace-dev setup"
+```
+
+Create the test and scripts directories:
+
+```bash
+mkdir -p ~/.openclaw/workspace-dev/tests
+mkdir -p ~/.openclaw/workspace-dev/scripts
+```
+
+Create `~/.openclaw/workspace-dev/scripts/promote.sh`:
+```bash
+#!/bin/bash
+set -euo pipefail
+
+DEV="$HOME/.openclaw/workspace-dev"
+PROD="$HOME/.openclaw/workspace"
+
+# Refuse if uncommitted changes exist
+if ! git -C "$DEV" diff --quiet || ! git -C "$DEV" diff --cached --quiet; then
+  echo "ERROR: workspace-dev has uncommitted changes. Commit first."
+  exit 1
+fi
+
+# Files to sync
+SYNC_FILES=(
+  SOUL.md
+  IDENTITY.md
+  AGENTS.md
+  TOOLS.md
+  USER.md
+  HEARTBEAT.md
+  BOOT.md
+)
+
+echo "=== Promote: workspace-dev → workspace ==="
+echo ""
+
+# Diff preview
+CHANGES=0
+for f in "${SYNC_FILES[@]}"; do
+  if [ -f "$DEV/$f" ]; then
+    if [ ! -f "$PROD/$f" ] || ! diff -q "$DEV/$f" "$PROD/$f" > /dev/null 2>&1; then
+      echo "--- CHANGED: $f ---"
+      diff -u "$PROD/$f" "$DEV/$f" 2>/dev/null || echo "  (new file)"
+      echo ""
+      CHANGES=1
+    fi
+  fi
+done
+
+# Skills diff (directory-level)
+if [ -d "$DEV/skills" ]; then
+  SKILLS_DIFF=$(diff -rq "$DEV/skills" "$PROD/skills" 2>/dev/null || true)
+  if [ -n "$SKILLS_DIFF" ]; then
+    echo "--- CHANGED: skills/ ---"
+    echo "$SKILLS_DIFF"
+    echo ""
+    CHANGES=1
+  fi
+fi
+
+if [ "$CHANGES" -eq 0 ]; then
+  echo "No changes to promote."
+  exit 0
+fi
+
+echo ""
+read -rp "Promote these changes to production? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  echo "Aborted."
+  exit 1
+fi
+
+# Sync workspace files
+for f in "${SYNC_FILES[@]}"; do
+  if [ -f "$DEV/$f" ]; then
+    cp "$DEV/$f" "$PROD/$f"
+  fi
+done
+
+# Sync skills directory
+rsync -a --delete "$DEV/skills/" "$PROD/skills/"
+
+echo "Promoted to production. Changes take effect on next agent turn (hot-reload)."
+```
+
+```bash
+chmod +x ~/.openclaw/workspace-dev/scripts/promote.sh
+```
+
+> **What promote.sh does:** Checks for uncommitted changes (refuses if any), shows a diff of what would change in the production workspace, asks for confirmation, then copies workspace files and skills. PROD-owned files (MEMORY.md, `memory/`, SYSTEM_LOG.md) are never touched. The Gateway hot-reloads on the next message — no restart needed.
 
 ---
 
 ### Phase 4: Build Domain Skills
 
-Create custom skills in `~/.openclaw/workspace/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gog sheets` CLI.
+Create custom skills in `~/.openclaw/workspace-dev/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gog sheets` CLI.
 
 > **Claude Code users:** This is the highest-ROI phase for Claude Code. Give it all your placeholder values and let it create all skill files in one session. Example: `"Create all domain skills from the setup guide, using these sheet IDs: Data=[ID], Config=[ID], Contacts=[ID]"`.
 
@@ -1025,10 +1174,10 @@ Below are two example skills demonstrating common patterns. Replace these with y
 **4.1 — Daily Greeting Skill (Example: CRON + Messaging)**
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/daily-greeting
+mkdir -p ~/.openclaw/workspace-dev/skills/daily-greeting
 ```
 
-Create `~/.openclaw/workspace/skills/daily-greeting/SKILL.md`:
+Create `~/.openclaw/workspace-dev/skills/daily-greeting/SKILL.md`:
 ```yaml
 ---
 name: daily-greeting
@@ -1054,10 +1203,10 @@ Send a friendly daily status greeting to the operator via Telegram DM.
 **4.2 — Data Lookup Skill (Example: Google Sheets Query)**
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/data-lookup
+mkdir -p ~/.openclaw/workspace-dev/skills/data-lookup
 ```
 
-Create `~/.openclaw/workspace/skills/data-lookup/SKILL.md`:
+Create `~/.openclaw/workspace-dev/skills/data-lookup/SKILL.md`:
 ```yaml
 ---
 name: data-lookup
@@ -1098,10 +1247,10 @@ Look up records in the primary data sheet matching a user's search term.
 **4.3 — Backup Automation Skill**
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/backup
+mkdir -p ~/.openclaw/workspace-dev/skills/backup
 ```
 
-Create `~/.openclaw/workspace/skills/backup/SKILL.md`:
+Create `~/.openclaw/workspace-dev/skills/backup/SKILL.md`:
 ```markdown
 ---
 name: backup
@@ -1118,7 +1267,7 @@ metadata:
 Nightly at 11:59 PM (triggered by CRON), or when operator requests a manual backup.
 
 ## What Gets Backed Up
-The workspace directory (~/.openclaw/workspace/) which contains:
+The workspace-dev directory (~/.openclaw/workspace-dev/) which contains:
 - SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md
 - All skills (skills/**/SKILL.md)
 - SYSTEM_LOG.md, MEMORY.md, memory/ files
@@ -1135,12 +1284,14 @@ This backup covers agent configuration, skills, memory, and operational logs.
    "Backup failed at [timestamp]: [error]"
 
 ## NEVER
-- Push anything outside ~/.openclaw/workspace/.
+- Push anything outside ~/.openclaw/workspace-dev/.
 - Modify the backup script itself.
 - Store credentials in any workspace file.
 ```
 
 > **Building your own skills:** The examples above demonstrate two common patterns: CRON-triggered reporting (daily-greeting) and user-triggered data lookup (data-lookup). Your domain skills will follow the same structure but with your specific data schemas, business logic, and messaging templates. Use the runbook format (When to Use → Workflow → Edge Cases → Output) for consistent, reliable agent behavior.
+
+> **Deploy skills to production:** After creating and testing skills, commit them in workspace-dev and run `./scripts/promote.sh` to sync to the production workspace.
 
 ---
 
@@ -1153,7 +1304,7 @@ Create `~/scripts/daily_backup.sh` (the `~/scripts/` directory was created in Ph
 cat > ~/scripts/daily_backup.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
-cd ~/.openclaw/workspace
+cd ~/.openclaw/workspace-dev
 git add -A
 git commit -m "Auto-backup $(date +%Y-%m-%d_%H:%M)" || echo "No changes to commit"
 git push origin main
@@ -1181,14 +1332,13 @@ EOF
 chmod 600 ~/.ssh/config
 ```
 
-Initialize the workspace as a git repo:
+Add the backup remote to workspace-dev (already initialized in Phase 3.14):
 ```bash
-cd ~/.openclaw/workspace
-git init
+cd ~/.openclaw/workspace-dev
 git remote add origin git@github-backup:[BACKUP_REPO].git
 ```
 
-Create `~/.openclaw/workspace/.gitignore` to prevent committing sensitive or generated files:
+Create `~/.openclaw/workspace-dev/.gitignore` to prevent committing sensitive or generated files:
 ```
 # SQLite memory index (derived, not canonical)
 *.sqlite
@@ -1208,6 +1358,8 @@ Thumbs.db
 
 > Do NOT use `git config --global credential.helper store` — this writes tokens in plaintext to disk where the agent can read them. Use SSH deploy keys instead.
 
+> **PROD-owned state:** The production workspace contains agent-managed files (MEMORY.md, `memory/`, SYSTEM_LOG.md) that are not in workspace-dev. To back these up, add them to the daily backup script: `cp ~/.openclaw/workspace/MEMORY.md ~/.openclaw/workspace-dev/prod-state/ && cp -r ~/.openclaw/workspace/memory/ ~/.openclaw/workspace-dev/prod-state/memory/` — or set up a separate backup for the production workspace.
+
 **5.3 — Register CRON Jobs via OpenClaw**
 
 Use OpenClaw's built-in CRON system rather than raw system crontab. Below are the essential infrastructure jobs. Add your domain-specific jobs as needed:
@@ -1215,7 +1367,7 @@ Use OpenClaw's built-in CRON system rather than raw system crontab. Below are th
 ```bash
 # System event jobs (session=main, exec access)
 openclaw cron add --name "daily-backup" --cron "59 23 * * *" --message "bash ~/scripts/daily_backup.sh"
-openclaw cron add --name "hourly-checkpoint" --cron "0 * * * *" --message "bash -c 'cd ~/.openclaw/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
+openclaw cron add --name "hourly-checkpoint" --cron "0 * * * *" --message "bash -c 'cd ~/.openclaw/workspace-dev && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
 
 # Example: Daily greeting — every day at 9:00 AM UTC
 openclaw cron add --name "daily-greeting" --cron "0 9 * * *" --tz "[TIMEZONE]" --message "Run daily-greeting skill: send morning status to operator Telegram." --timeout-seconds 60
@@ -1467,8 +1619,8 @@ grep -A 5 '"sandbox"' ~/.openclaw/openclaw.json | grep -A 5 '"tools"'
 **Backup push fails:**
 - Verify deploy key is added to GitHub repo: `ssh -T git@github-backup` — should say "successfully authenticated."
 - Check SSH config: `cat ~/.ssh/config | grep -A 4 github-backup`
-- Verify remote URL: `cd ~/.openclaw/workspace && git remote -v`
-- Check git status: `cd ~/.openclaw/workspace && git status`
+- Verify remote URL: `cd ~/.openclaw/workspace-dev && git remote -v`
+- Check git status: `cd ~/.openclaw/workspace-dev && git status`
 
 **Memory search returns empty results:**
 - Known SQLite index issues (GitHub issues #4868, #9888, #7464) can cause empty vector/BM25 search results.
@@ -1486,7 +1638,7 @@ Setup is not a one-time event. Schedule these recurring maintenance tasks:
 - Review `SYSTEM_LOG.md` for unexpected entries, failed operations, or injection alerts.
 - Review `memory/` files for suspicious content (memory poisoning indicator): `grep -r "ignore\|override\|new instructions\|act as" ~/.openclaw/workspace/memory/`
 - Check API usage at your provider's dashboard (Anthropic Console, OpenRouter, etc.).
-- Verify backups are arriving in the GitHub repo: `cd ~/.openclaw/workspace && git log --oneline -5`
+- Verify backups are arriving in the GitHub repo: `cd ~/.openclaw/workspace-dev && git log --oneline -5`
 - Verify exec is scoped via allowlist: `grep '"security"' ~/.openclaw/exec-approvals.json` (must show `"allowlist"`).
 - Verify email isolation holds: `grep '"email_send"' ~/.openclaw/openclaw.json` (must be in deny list).
 - Audit approved pairings: `openclaw pairing list --approved whatsapp` and `openclaw pairing list --approved telegram`. Remove any unrecognized contacts. Note: previously approved pairings persist in `~/.openclaw/credentials/` and survive config changes.
@@ -1515,16 +1667,16 @@ Setup is not a one-time event. Schedule these recurring maintenance tasks:
 When you need to update skills — new data schemas, changed workflows, seasonal adjustments — follow this workflow:
 
 1. SSH into the Droplet and attach to Claude Code: `tmux attach -t claude-code`
-2. Navigate to workspace: `cd ~/.openclaw/workspace`
-3. Create a git checkpoint: `git add -A && git commit -m "pre-edit: [description]"`
-4. Edit the skill using Claude Code (`claude`) or a text editor:
+2. Navigate to dev workspace: `cd ~/.openclaw/workspace-dev`
+3. Edit the skill using Claude Code (`claude`) or a text editor:
    - Existing skill: modify `skills/<skill-name>/SKILL.md`
    - New skill: `mkdir -p skills/<new-skill>` → create `SKILL.md` with YAML frontmatter (see Phase 4 examples)
-5. OpenClaw picks up changes automatically via the skill watcher (~250ms debounce). No gateway restart needed. The updated skill takes effect on the **next agent turn**.
-6. Test the change: send a test message via WhatsApp group (for customer-facing skills) or Telegram DM (for operator skills). Verify correct behavior.
-7. If the change breaks something: `git checkout -- skills/<skill-name>/SKILL.md` (reverts to checkpoint)
-8. If the change works: `git add -A && git commit -m "skill update: [description]" && git push`
-9. Run `openclaw security audit --deep` after any skill edit to check for exposed keys, misconfigured permissions, and vulnerabilities.
+4. (Optional) Test with DEV Gateway: `openclaw start --config ~/.openclaw/openclaw-dev.json` — send test messages via the DEV dashboard (`http://localhost:18790` via SSH tunnel). Stop when done.
+5. Commit: `git add -A && git commit -m "skill update: [description]"`
+6. Promote to production: `./scripts/promote.sh` — review the diff, confirm deployment.
+7. Verify: send a test message via WhatsApp group or Telegram DM. The PROD Gateway hot-reloads on next turn.
+8. If the change breaks something: `./scripts/promote.sh` after reverting in dev (`git checkout HEAD~1 -- skills/<skill-name>/SKILL.md && git commit -m "revert: [reason]"`)
+9. Push to backup: `git push`
 
 **Skill editing principles:**
 
@@ -1553,7 +1705,7 @@ When you need to update skills — new data schemas, changed workflows, seasonal
 2. **Review the session transcript:** Check `~/.openclaw/agents/*/sessions/` for the active session JSONL.
 3. **Review memory for poisoning:** `grep -r "ignore\|override\|forget\|new instructions" ~/.openclaw/workspace/memory/`
 4. **Check for unauthorized CRON jobs:** `openclaw cron list`
-5. **Restore from backup if needed:** `cd ~/.openclaw/workspace && git log --oneline` then `git checkout <last-known-good-commit>`
+5. **Restore from backup if needed:** `cd ~/.openclaw/workspace-dev && git log --oneline` then `git checkout <last-known-good-commit>` followed by `./scripts/promote.sh` to push the fix to production.
 6. **Check for denied tool attempts:** `grep -r "email_send\|email_read\|gmail\|exec\|claude" ~/.openclaw/agents/*/sessions/` — any hits indicate the agent tried to use denied tools.
 7. **Rotate all credentials** before restarting the agent.
 
@@ -1611,7 +1763,10 @@ When you need to update skills — new data schemas, changed workflows, seasonal
 | **Sender trust levels** | **`SOUL.md` → Communication Rules** | **Reasoning** | **Operator (trusted) vs user (untrusted) scoping** |
 | **Injection defense rules** | **`SOUL.md` → Prompt Injection Defense** | **Reasoning** | **Explicit instructions to treat user input as adversarial** |
 | **Claude Code binary** | **`~/.local/bin/claude`** | **OS** | **Human operator tool only; OpenClaw cannot access** |
-| **Claude Code workspace rules** | **`~/.openclaw/workspace/.claude/settings.json`** | **Claude Code** | **Deny rules protect openclaw.json, secrets, sudo** |
-| **Claude Code project context** | **`~/.openclaw/workspace/CLAUDE.md`** | **Soft guidance** | **Context for Claude Code (not a security boundary)** |
+| **Claude Code workspace rules** | **`~/.openclaw/workspace-dev/.claude/settings.json`** | **Claude Code** | **Deny rules protect openclaw.json, secrets, sudo** |
+| **Claude Code project context** | **`~/.openclaw/workspace-dev/CLAUDE.md`** | **Soft guidance** | **Context for Claude Code (not a security boundary)** |
+| **DEV Gateway config** | **`~/.openclaw/openclaw-dev.json`** | **Execution** | **Temporary Gateway on port 18790, no channels, workspace-dev** |
+| **DEV → PROD promotion** | **`~/.openclaw/workspace-dev/scripts/promote.sh`** | **Workflow** | **Git-aware rsync with diff preview and confirmation** |
+| **Workspace source of truth** | **`~/.openclaw/workspace-dev/`** | **Workflow** | **Git repo — all edits happen here, promoted to workspace/** |
 | **Claude Code auth** | **`~/.claude/` or `~/.bashrc.local`** | **OS** | **Separate from OpenClaw auth; rotate quarterly** |
 | **Claude Code sessions** | **`tmux attach -t claude-code`** | **OS** | **Persistent terminal sessions for human operator** |

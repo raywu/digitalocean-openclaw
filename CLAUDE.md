@@ -43,6 +43,7 @@ This is a documentation repository for the **OpenClaw** open-source, self-hosted
   - Agent writes daily observations and updates MEMORY.md when durable facts change
   - Boot and heartbeat checks verify memory index is non-empty
   - `memory_search` and `memory_get` must be in `tools.sandbox.tools.allow` — auto-detection provisions the index but sandbox blocks tool use without explicit allow
+- **DEV/PROD split**: `workspace-dev/` is the source of truth (git repo, Claude Code root); `workspace/` is PROD (deployed artifacts). `promote.sh` syncs dev → prod with git-aware safety checks. `openclaw-dev.json` enables temporary DEV Gateway on port 18790 with no channels.
 
 ## Git
 

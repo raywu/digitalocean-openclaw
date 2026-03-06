@@ -52,6 +52,11 @@ BUSINESS VALUES (I'll fill these in — leave as placeholders if I haven't provi
 - GitHub Backup Repo (e.g. acme-corp/openclaw-backup): ___
 - Gateway Auth Token: ___
 
+IMPORTANT: All workspace files are created in ~/.openclaw/workspace-dev/ (the development workspace).
+The production workspace (~/.openclaw/workspace/) receives files via promote.sh after testing.
+openclaw.json references "workspace": "~/.openclaw/workspace" — that is the PROD config and stays as-is.
+A separate openclaw-dev.json points to workspace-dev for local testing.
+
 Execute the following 15 task blocks in order. Each block maps to a specific part of the setup guide.
 
 ═══════════════════════════════════════════════════════════
@@ -183,7 +188,7 @@ Phase 3 — Workspace files (first batch):
 
 Before creating files, confirm I've provided all Business Values listed at the top. If any are missing, ask for them now.
 
-1. Create ~/.openclaw/workspace/SOUL.md with this EXACT content (substitute my business values for the bracketed placeholders, but preserve every other word):
+1. Create ~/.openclaw/workspace-dev/SOUL.md with this EXACT content (substitute my business values for the bracketed placeholders, but preserve every other word):
 
 ---BEGIN SOUL.md---
 # SOUL.md
@@ -327,7 +332,7 @@ You are not a general-purpose assistant — stay within your domain.
      why, and that the operator approved it.
 ---END SOUL.md---
 
-2. Create ~/.openclaw/workspace/IDENTITY.md:
+2. Create ~/.openclaw/workspace-dev/IDENTITY.md:
 
 ---BEGIN IDENTITY.md---
 # IDENTITY.md
@@ -349,7 +354,7 @@ TASK 5: Create Remaining Workspace Files (AGENTS, TOOLS, USER, HEARTBEAT, BOOT, 
 
 Phase 3.3–3.6 — Create these files with EXACT content:
 
-1. Create ~/.openclaw/workspace/AGENTS.md:
+1. Create ~/.openclaw/workspace-dev/AGENTS.md:
 
 ---BEGIN AGENTS.md---
 # AGENTS.md
@@ -377,7 +382,7 @@ Phase 3.3–3.6 — Create these files with EXACT content:
 - Add your custom CRON job descriptions here
 ---END AGENTS.md---
 
-2. Create ~/.openclaw/workspace/TOOLS.md:
+2. Create ~/.openclaw/workspace-dev/TOOLS.md:
 
 ---BEGIN TOOLS.md---
 # TOOLS.md
@@ -431,7 +436,7 @@ Phase 3.3–3.6 — Create these files with EXACT content:
   batch of work. Your memory files persist across sessions.
 ---END TOOLS.md---
 
-3. Create ~/.openclaw/workspace/USER.md:
+3. Create ~/.openclaw/workspace-dev/USER.md:
 
 ---BEGIN USER.md---
 # USER.md
@@ -451,7 +456,7 @@ Phase 3.3–3.6 — Create these files with EXACT content:
   Columns: [Customize to your domain]
 ---END USER.md---
 
-4. Create ~/.openclaw/workspace/HEARTBEAT.md:
+4. Create ~/.openclaw/workspace-dev/HEARTBEAT.md:
 
 ---BEGIN HEARTBEAT.md---
 # HEARTBEAT.md
@@ -477,7 +482,7 @@ every: "1h"
 - Write to Google Sheets during heartbeat (read-only checks only).
 ---END HEARTBEAT.md---
 
-5. Create ~/.openclaw/workspace/BOOT.md:
+5. Create ~/.openclaw/workspace-dev/BOOT.md:
 
 ---BEGIN BOOT.md---
 # BOOT.md
@@ -500,7 +505,7 @@ If any workspace file is missing or corrupt:
 - Do NOT proceed with normal operations until operator confirms.
 ---END BOOT.md---
 
-6. Create ~/.openclaw/workspace/SYSTEM_LOG.md:
+6. Create ~/.openclaw/workspace-dev/SYSTEM_LOG.md:
 
 ---BEGIN SYSTEM_LOG.md---
 # System Log
@@ -534,7 +539,7 @@ If any workspace file is missing or corrupt:
 - [DEPLOY_DATE]: Google Sheets connected. Test read confirmed.
 ---END SYSTEM_LOG.md---
 
-7. Create ~/.openclaw/workspace/MEMORY.md:
+7. Create ~/.openclaw/workspace-dev/MEMORY.md:
 
 ---BEGIN MEMORY.md---
 # MEMORY.md — Long-Term Agent Memory
@@ -761,6 +766,22 @@ NOTE — Claude API key: OpenClaw uses Anthropic API keys (sk-ant-xxxxx from
 console.anthropic.com), not OAuth tokens from claude.ai subscriptions. Pro/Max/Team
 subscriptions cannot be used with third-party tools.
 
+Phase 3.8b — Create the DEV Gateway config:
+Copy openclaw.json and modify for development use:
+   cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw-dev.json
+
+Edit ~/.openclaw/openclaw-dev.json — change these three settings:
+1. Workspace path: "workspace": "~/.openclaw/workspace-dev"
+2. Gateway port: "port": 18790
+3. Remove all channel config: Delete the entire "channels" and "plugins" sections (Telegram, WhatsApp)
+
+Why a separate config? DEV needs a temporary Gateway for testing CRON jobs and sandbox behavior.
+Using a different port (18790) prevents conflicts with the always-on PROD Gateway, and removing
+channels prevents DEV from accidentally responding to real users.
+Start DEV with: openclaw start --config ~/.openclaw/openclaw-dev.json
+Stop when done testing.
+SSH tunnel for DEV dashboard: ssh -L 18790:localhost:18790 clawuser@[DROPLET_IP] → open http://localhost:18790.
+
 ═══════════════════════════════════════════════════════════
 TASK 7: Build Sandbox Docker Image
 ═══════════════════════════════════════════════════════════
@@ -891,8 +912,8 @@ TASK 9: Configure Claude Code Workspace Permissions
 
 Phase 3.12 — Two files for Claude Code's awareness of the OpenClaw workspace:
 
-1. Create ~/.openclaw/workspace/.claude/settings.json:
-   mkdir -p ~/.openclaw/workspace/.claude
+1. Create ~/.openclaw/workspace-dev/.claude/settings.json:
+   mkdir -p ~/.openclaw/workspace-dev/.claude
 
 ---BEGIN .claude/settings.json---
 {
@@ -917,7 +938,7 @@ Phase 3.12 — Two files for Claude Code's awareness of the OpenClaw workspace:
 }
 ---END .claude/settings.json---
 
-2. Create ~/.openclaw/workspace/CLAUDE.md:
+2. Create ~/.openclaw/workspace-dev/CLAUDE.md:
 
 ---BEGIN CLAUDE.md---
 # OpenClaw Agent — Workspace
@@ -930,7 +951,8 @@ DigitalOcean Droplet (Ubuntu 24.04). The agent is configured for
 ## Architecture
 - **OpenClaw Gateway:** Runs as a persistent daemon on localhost:18789
 - **Config:** ~/.openclaw/openclaw.json (contains API keys — NEVER modify)
-- **Workspace:** This directory (~/.openclaw/workspace/)
+- **Workspace (dev):** This directory (~/.openclaw/workspace-dev/)
+- **Workspace (prod):** ~/.openclaw/workspace/ (deploy via ./scripts/promote.sh)
 - **Data backend:** Google Sheets accessed via gog CLI
 - **Messaging:** WhatsApp (user-facing), Telegram (operator alerts/reports)
 - **Backups:** Nightly git push to private GitHub repo via ~/scripts/daily_backup.sh
@@ -972,6 +994,102 @@ OpenClaw cannot exec, spawn, or reference Claude Code in any way.
 
 Show me both files after creation.
 
+Phase 3.14 — Initialize workspace-dev as a Git Repository and create promote.sh:
+
+1. cd ~/.openclaw/workspace-dev
+   git init
+   git add -A
+   git commit -m "Initial workspace-dev setup"
+
+2. Create directories:
+   mkdir -p ~/.openclaw/workspace-dev/tests
+   mkdir -p ~/.openclaw/workspace-dev/scripts
+
+3. Create ~/.openclaw/workspace-dev/scripts/promote.sh:
+
+---BEGIN promote.sh---
+#!/bin/bash
+set -euo pipefail
+
+DEV="$HOME/.openclaw/workspace-dev"
+PROD="$HOME/.openclaw/workspace"
+
+# Refuse if uncommitted changes exist
+if ! git -C "$DEV" diff --quiet || ! git -C "$DEV" diff --cached --quiet; then
+  echo "ERROR: workspace-dev has uncommitted changes. Commit first."
+  exit 1
+fi
+
+# Files to sync
+SYNC_FILES=(
+  SOUL.md
+  IDENTITY.md
+  AGENTS.md
+  TOOLS.md
+  USER.md
+  HEARTBEAT.md
+  BOOT.md
+)
+
+echo "=== Promote: workspace-dev → workspace ==="
+echo ""
+
+# Diff preview
+CHANGES=0
+for f in "${SYNC_FILES[@]}"; do
+  if [ -f "$DEV/$f" ]; then
+    if [ ! -f "$PROD/$f" ] || ! diff -q "$DEV/$f" "$PROD/$f" > /dev/null 2>&1; then
+      echo "--- CHANGED: $f ---"
+      diff -u "$PROD/$f" "$DEV/$f" 2>/dev/null || echo "  (new file)"
+      echo ""
+      CHANGES=1
+    fi
+  fi
+done
+
+# Skills diff (directory-level)
+if [ -d "$DEV/skills" ]; then
+  SKILLS_DIFF=$(diff -rq "$DEV/skills" "$PROD/skills" 2>/dev/null || true)
+  if [ -n "$SKILLS_DIFF" ]; then
+    echo "--- CHANGED: skills/ ---"
+    echo "$SKILLS_DIFF"
+    echo ""
+    CHANGES=1
+  fi
+fi
+
+if [ "$CHANGES" -eq 0 ]; then
+  echo "No changes to promote."
+  exit 0
+fi
+
+echo ""
+read -rp "Promote these changes to production? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  echo "Aborted."
+  exit 1
+fi
+
+# Sync workspace files
+for f in "${SYNC_FILES[@]}"; do
+  if [ -f "$DEV/$f" ]; then
+    cp "$DEV/$f" "$PROD/$f"
+  fi
+done
+
+# Sync skills directory
+rsync -a --delete "$DEV/skills/" "$PROD/skills/"
+
+echo "Promoted to production. Changes take effect on next agent turn (hot-reload)."
+---END promote.sh---
+
+chmod +x ~/.openclaw/workspace-dev/scripts/promote.sh
+
+What promote.sh does: Checks for uncommitted changes (refuses if any), shows a diff of
+what would change in the production workspace, asks for confirmation, then copies workspace
+files and skills. PROD-owned files (MEMORY.md, memory/, SYSTEM_LOG.md) are never touched.
+The Gateway hot-reloads on the next message — no restart needed.
+
 ═══════════════════════════════════════════════════════════
 TASK 10: Create Example Skills
 ═══════════════════════════════════════════════════════════
@@ -989,7 +1107,7 @@ SKILL ARCHITECTURE CONTEXT (for understanding, not for file creation):
 
 Create these 2 example skills (replace with your domain-specific skills after setup):
 
-1. mkdir -p ~/.openclaw/workspace/skills/daily-greeting
+1. mkdir -p ~/.openclaw/workspace-dev/skills/daily-greeting
    Write skills/daily-greeting/SKILL.md:
 
 ---BEGIN daily-greeting/SKILL.md---
@@ -1022,7 +1140,7 @@ Send a friendly daily status greeting to the operator via Telegram DM.
 Telegram DM sent to operator. No files modified.
 ---END daily-greeting/SKILL.md---
 
-2. mkdir -p ~/.openclaw/workspace/skills/data-lookup
+2. mkdir -p ~/.openclaw/workspace-dev/skills/data-lookup
    Write skills/data-lookup/SKILL.md:
 
 ---BEGIN data-lookup/SKILL.md---
@@ -1070,7 +1188,7 @@ Look up records in the primary data sheet matching a user's search term.
 Formatted search results sent to the requesting channel. No files modified.
 ---END data-lookup/SKILL.md---
 
-3. mkdir -p ~/.openclaw/workspace/skills/backup
+3. mkdir -p ~/.openclaw/workspace-dev/skills/backup
    Write skills/backup/SKILL.md:
 
 ---BEGIN backup/SKILL.md---
@@ -1089,7 +1207,7 @@ metadata:
 Nightly at 11:59 PM (triggered by CRON), or when operator requests a manual backup.
 
 ## What Gets Backed Up
-The workspace directory (~/.openclaw/workspace/) which contains:
+The workspace-dev directory (~/.openclaw/workspace-dev/) which contains:
 - SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md
 - All skills (skills/**/SKILL.md)
 - SYSTEM_LOG.md, MEMORY.md, memory/ files
@@ -1106,12 +1224,12 @@ This backup covers agent configuration, skills, memory, and operational logs.
    "Warning: Backup failed at [timestamp]: [error]"
 
 ## NEVER
-- Push anything outside ~/.openclaw/workspace/.
+- Push anything outside ~/.openclaw/workspace-dev/.
 - Modify the backup script itself.
 - Store credentials in any workspace file.
 ---END backup/SKILL.md---
 
-After creating all skills, run: ls -la ~/.openclaw/workspace/skills/*/SKILL.md
+After creating all skills, run: ls -la ~/.openclaw/workspace-dev/skills/*/SKILL.md
 Show me the output to confirm all files exist.
 
 ═══════════════════════════════════════════════════════════
@@ -1125,7 +1243,7 @@ Phase 5.1 — Backup script:
 ---BEGIN daily_backup.sh---
 #!/bin/bash
 set -euo pipefail
-cd ~/.openclaw/workspace
+cd ~/.openclaw/workspace-dev
 git add -A
 git commit -m "Auto-backup $(date +%Y-%m-%d_%H:%M)" || echo "No changes to commit"
 git push origin main
@@ -1148,12 +1266,12 @@ Phase 5.2 — SSH deploy key:
    EOF
    chmod 600 ~/.ssh/config
 
-7. Initialize workspace git repo:
-   cd ~/.openclaw/workspace
+7. Initialize workspace-dev git repo:
+   cd ~/.openclaw/workspace-dev
    git init
    git remote add origin git@github-backup:[BACKUP_REPO].git
 
-8. Create ~/.openclaw/workspace/.gitignore:
+8. Create ~/.openclaw/workspace-dev/.gitignore:
 
 ---BEGIN .gitignore---
 # SQLite memory index (derived, not canonical)
@@ -1182,7 +1300,7 @@ Phase 5.3 — CRON jobs (use OpenClaw's built-in CRON, not system crontab):
 
 # systemEvent jobs (session=main, exec access)
 1. openclaw cron add --name "daily-backup" --cron "59 23 * * *" --message "bash ~/scripts/daily_backup.sh"
-2. openclaw cron add --name "hourly-checkpoint" --cron "5 * * * *" --message "bash -c 'cd ~/.openclaw/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
+2. openclaw cron add --name "hourly-checkpoint" --cron "5 * * * *" --message "bash -c 'cd ~/.openclaw/workspace-dev && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
 
 # Example skill job (agentTurn, isolated session)
 3. openclaw cron add --name "daily-greeting" --cron "0 9 * * *" --tz "[TIMEZONE]" --message "Run daily-greeting skill: send morning greeting to operator Telegram." --timeout-seconds 60
@@ -1197,7 +1315,7 @@ When editing a skill with a corresponding CRON job:
 For agentTurn timeouts: use --timeout-seconds <n> (not --timeout). Default 30s; batch jobs need 300s.
 
 Phase 5.4 — Create the memory directory:
-4. mkdir -p ~/.openclaw/workspace/memory
+4. mkdir -p ~/.openclaw/workspace-dev/memory
 
 Verify CRON jobs: openclaw cron list — show me the output.
 
@@ -1207,7 +1325,7 @@ TASK 13: Run Initial Git Backup
 
 Phase 5.2 completion — now that all files exist:
 
-1. cd ~/.openclaw/workspace
+1. cd ~/.openclaw/workspace-dev
 2. git add -A
 3. git commit -m "Initial setup: workspace files, skills, and configuration"
 4. git push origin main
@@ -1237,7 +1355,7 @@ AUTOMATED TESTS (run these):
 15. openclaw secrets audit → must report no exposed secrets
 16. openclaw status → must show Gateway running, bound to 127.0.0.1:18789
 17. openclaw sandbox explain → must show non-main sandboxed, workspace read-only
-18. grep -r "sk-" ~/.openclaw/workspace/ → must find NOTHING
+18. grep -r "sk-" ~/.openclaw/workspace-dev/ → must find NOTHING
 19. grep -A 5 '"allowFrom"' ~/.openclaw/openclaw.json → must show operator Telegram ID
 20. grep '"groupPolicy"' ~/.openclaw/openclaw.json → WhatsApp: "disabled", Telegram: "disabled"
 21. grep '"dmScope"' ~/.openclaw/openclaw.json → must show "per-channel-peer"
@@ -1255,7 +1373,7 @@ BACKUP TEST:
 27. bash ~/scripts/daily_backup.sh
 
 CLAUDE CODE PERMISSION TESTS:
-28. cd ~/.openclaw/workspace && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
+28. cd ~/.openclaw/workspace-dev && claude --permission-mode dontAsk "Try to edit SOUL.md — add a comment"
     → should FAIL silently
 29. claude --permission-mode dontAsk "Try to run: sudo apt update"
     → should FAIL silently
@@ -1302,12 +1420,12 @@ SETUP COMPLETE
 After all 15 tasks pass, confirm:
 - Total workspace files created: 10 (SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md, BOOT.md, SYSTEM_LOG.md, MEMORY.md, CLAUDE.md)
 - Total example skills created: 3 (daily-greeting, data-lookup, backup)
-- Config files: openclaw.json, exec-approvals.json, .env, .claude/settings.json
-- Support files: .gitignore, daily_backup.sh, safe-git.sh
+- Config files: openclaw.json, openclaw-dev.json, exec-approvals.json, .env, .claude/settings.json
+- Support files: .gitignore, daily_backup.sh, safe-git.sh, promote.sh
 - CRON jobs: 3 (daily-backup, hourly-checkpoint, daily-greeting)
 - Git repo initialized and pushed
 
-Total: 18 files + 3 CRON jobs
+Total: 20 files + 3 CRON jobs
 
 Begin with Task 1. Ask me for any missing business values before creating files.
 ```
@@ -1323,10 +1441,10 @@ Begin with Task 1. Ask me for any missing business values before creating files.
 | 3 | Google Sheets skill + OAuth | 2.5 | Partial | Google Cloud console, OAuth flow, create sheets |
 | 4 | SOUL.md + IDENTITY.md | 3.1–3.2 | Full | None (values collected upfront) |
 | 5 | AGENTS.md + TOOLS.md + USER.md + HEARTBEAT.md + BOOT.md + SYSTEM_LOG.md + MEMORY.md | 3.3–3.9 | Full | None |
-| 6 | Complete openclaw.json | 3.8 | Full | None (replaces earlier partial configs) |
+| 6 | Complete openclaw.json + openclaw-dev.json | 3.8–3.8b | Full | None (replaces earlier partial configs) |
 | 7 | Build sandbox Docker image | 3.9 | Full | None |
 | 8 | File permissions + exec-approvals + safe-git.sh + .env | 3.10–3.12 | Partial | Fill in .env secrets |
-| 9 | Claude Code workspace permissions | 3.12 | Full | None |
+| 9 | Claude Code workspace permissions + promote.sh | 3.12–3.14 | Full | None |
 | 10 | 2 example skills + backup skill | 4 | Full | None |
 | 11 | Backup script + SSH deploy key + git init | 5.1–5.2 | Partial | Add deploy key to GitHub |
 | 12 | 3 CRON jobs + memory dir | 5.3–5.4 | Full | None |
