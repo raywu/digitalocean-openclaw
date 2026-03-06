@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a documentation repository for the **OpenClaw** open-source, self-hosted AI agent framework — specifically, deployment guides and reference material for running OpenClaw on DigitalOcean infrastructure. There is no application code, build system, or test suite.
 
-### Document Structure (`doc/`)
+### Document Structure (`docs/`)
 
 **Core:**
 - **`openclaw-setup-guide.md`** — Generic deployment walkthrough for Ubuntu 24.04 on DigitalOcean (vanilla OpenClaw, no business-specific content)
