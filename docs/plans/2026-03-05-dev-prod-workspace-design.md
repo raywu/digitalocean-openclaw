@@ -7,27 +7,30 @@ All workspace editing happens directly in the live `~/.openclaw/workspace/` dire
 ## Architecture
 
 ```
-~/.openclaw/
-├── openclaw.json              # PROD config (port 18789, channels enabled)
-├── openclaw-dev.json          # DEV config (port 18790, no channels)
-├── .env                       # Shared secrets
-├── workspace/                 # PRODUCTION — Gateway reads from here
-│   ├── SOUL.md                #   deployed artifact, not edited directly
-│   ├── IDENTITY.md
-│   ├── AGENTS.md
-│   ├── TOOLS.md
-│   ├── USER.md
-│   ├── HEARTBEAT.md
-│   ├── BOOT.md
-│   ├── MEMORY.md              #   PROD-owned (agent writes)
-│   ├── memory/                #   PROD-owned
-│   ├── SYSTEM_LOG.md          #   PROD-owned
-│   └── skills/
-└── workspace-dev/             # DEV — git repo + Claude Code root
+~/.openclaw/                           # PROD state dir
+├── openclaw.json                      #   PROD config (port 18789, channels enabled)
+├── .env                               #   Shared secrets
+└── workspace/                         #   PRODUCTION — Gateway reads from here
+    ├── SOUL.md                        #     deployed artifact, not edited directly
+    ├── IDENTITY.md
+    ├── AGENTS.md
+    ├── TOOLS.md
+    ├── USER.md
+    ├── HEARTBEAT.md
+    ├── BOOT.md
+    ├── MEMORY.md                      #     PROD-owned (agent writes)
+    ├── memory/                        #     PROD-owned
+    ├── SYSTEM_LOG.md                  #     PROD-owned
+    └── skills/
+
+~/.openclaw-dev/                       # DEV state dir (--dev flag)
+├── openclaw.json                      #   DEV config (port 18790, no channels)
+├── .env -> ~/.openclaw/.env           #   symlink to shared secrets
+└── workspace/                         #   DEV — git repo + Claude Code root
     ├── .git/
     ├── .claude/settings.json
-    ├── CLAUDE.md              #   dev-only, never promoted
-    ├── SOUL.md                #   source of truth — edit here
+    ├── CLAUDE.md                      #     dev-only, never promoted
+    ├── SOUL.md                        #     source of truth — edit here
     ├── IDENTITY.md
     ├── AGENTS.md
     ├── TOOLS.md
@@ -45,22 +48,23 @@ All workspace editing happens directly in the live `~/.openclaw/workspace/` dire
 ### Single PROD Gateway, temporary DEV Gateway
 
 - PROD Gateway runs always, pointing at `workspace/` on port 18789 with channels enabled.
-- DEV Gateway started on-demand for CRON/sandbox testing via `openclaw start --config ~/.openclaw/openclaw-dev.json`, then stopped when done.
+- DEV Gateway started on-demand for CRON/sandbox testing via `openclaw start --dev`, then stopped when done.
 
-### Two config files
+### Two state directories
 
-| | `openclaw.json` (PROD) | `openclaw-dev.json` (DEV) |
+| | `~/.openclaw/` (PROD) | `~/.openclaw-dev/` (DEV) |
 |---|---|---|
-| workspace | `~/.openclaw/workspace` | `~/.openclaw/workspace-dev` |
+| config | `~/.openclaw/openclaw.json` | `~/.openclaw-dev/openclaw.json` |
+| workspace | `~/.openclaw/workspace` | `~/.openclaw-dev/workspace` |
 | port | 18789 | 18790 |
 | channels | Telegram + WhatsApp | none |
 | everything else | identical | identical |
 
-DEV has no channels to prevent accidentally responding to real users.
+DEV has no channels to prevent accidentally responding to real users. Start DEV with `openclaw start --dev`.
 
 ### promote.sh behavior
 
-1. Refuse to run if `workspace-dev/` has uncommitted git changes
+1. Refuse to run if DEV workspace has uncommitted git changes
 2. Show diff of what would change in `workspace/`
 3. Require y/n confirmation
 4. rsync the approved files
@@ -86,16 +90,16 @@ OpenClaw hot-reloads workspace files on next message. Since promote.sh only sync
 
 ### Claude Code root
 
-Operator runs Claude Code from `~/.openclaw/workspace-dev/`. The `CLAUDE.md` and `.claude/settings.json` there provide project context and permission rules for skill development.
+Operator runs Claude Code from `~/.openclaw-dev/workspace/`. The `CLAUDE.md` and `.claude/settings.json` there provide project context and permission rules for skill development.
 
 ## Workflow
 
 ```
 1. ssh claw
 2. tmux attach -t claude-code
-3. cd ~/.openclaw/workspace-dev
+3. cd ~/.openclaw-dev/workspace
 4. claude                          # edit SOUL.md, skills, etc.
 5. git add && git commit           # commit changes
 6. ./scripts/promote.sh            # review diff, confirm, deploy
-7. (optional) openclaw start --config ~/.openclaw/openclaw-dev.json  # test CRON/sandbox
+7. (optional) openclaw start --dev # test CRON/sandbox
 ```
