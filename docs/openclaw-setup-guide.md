@@ -211,7 +211,9 @@ DM policy options:
 
 > **Note:** The complete channel configuration — including `allowFrom`, `groupPolicy`, mention patterns, session isolation, and Telegram group disabling — is in Phase 3b. This minimal config just enables pairing for initial connection. Phase 3b replaces it entirely.
 
-**2.5 — Configure Google Sheets Access (via gog CLI)**
+**2.5 — Configure Google Sheets Access (via gog CLI) (Optional)**
+
+> **Note:** Google Sheets is optional. If you don't need Google Sheets as a data backend, skip this entire phase and proceed to Phase 3. Your agent can still operate using local workspace files, memory, or other data tools. When you skip this phase, also skip all sections marked "(if Google Sheets configured)" later in this guide.
 
 The agent will use Google Sheets as its structured data backend — replacing the fragile flat CSV approach. The `gog` CLI is bundled with OpenClaw and handles Google Sheets, Gmail, Calendar, Drive, Contacts, and Docs.
 
@@ -265,37 +267,41 @@ Note each spreadsheet's ID from the URL (the long string between `/d/` and `/edi
 
 #### DEV/PROD Workspace Architecture
 
-OpenClaw supports separate development and production workspaces. You edit and test in `workspace-dev/`, then promote changes to `workspace/` (which the Gateway reads). This keeps production stable while you iterate:
+OpenClaw supports separate development and production state directories, isolated by the `--dev` flag. You edit and test in the DEV workspace, then promote changes to PROD (which the Gateway reads). This keeps production stable while you iterate:
 
 ```
-~/.openclaw/
-├── openclaw.json              # PROD config (port 18789, channels enabled)
-├── openclaw-dev.json          # DEV config (port 18790, no channels)
-├── .env                       # Shared secrets
-├── workspace/                 # PRODUCTION — Gateway reads from here
-│   ├── SOUL.md                #   deployed artifact, not edited directly
+~/.openclaw/                    # PROD state dir (unchanged)
+├── openclaw.json               # PROD config (protected)
+├── .env                        # Shared secrets
+├── workspace/                  # PROD workspace (deployed artifact, no .git)
+│   ├── SOUL.md                 #   deployed artifact, not edited directly
 │   ├── IDENTITY.md, AGENTS.md, TOOLS.md, USER.md
 │   ├── HEARTBEAT.md, BOOT.md
-│   ├── MEMORY.md              #   PROD-owned (agent writes)
-│   ├── memory/                #   PROD-owned
-│   ├── SYSTEM_LOG.md          #   PROD-owned
+│   ├── MEMORY.md               #   PROD-owned (agent writes)
+│   ├── memory/                 #   PROD-owned
+│   ├── SYSTEM_LOG.md           #   PROD-owned
 │   └── skills/
-└── workspace-dev/             # DEV — git repo + Claude Code root
-    ├── .git/
-    ├── .claude/settings.json
-    ├── CLAUDE.md              #   dev-only, never promoted
-    ├── SOUL.md                #   source of truth — edit here
-    ├── IDENTITY.md, AGENTS.md, TOOLS.md, USER.md
-    ├── HEARTBEAT.md, BOOT.md
-    ├── skills/
-    ├── tests/
-    └── scripts/
-        └── promote.sh         #   rsync dev → prod
+├── cron/                       # PROD cron state
+
+~/.openclaw-dev/                # DEV state dir (isolated by --dev flag)
+├── openclaw.json               # DEV config (prod copy, WhatsApp removed, cron empty)
+├── workspace/                  # DEV workspace (git repo, Claude Code root)
+│   ├── .git/
+│   ├── .claude/settings.json
+│   ├── CLAUDE.md               #   dev-only, never promoted
+│   ├── SOUL.md                 #   source of truth — edit here
+│   ├── IDENTITY.md, AGENTS.md, TOOLS.md, USER.md
+│   ├── HEARTBEAT.md, BOOT.md
+│   ├── skills/
+│   ├── tests/
+│   └── scripts/
+│       └── promote.sh          #   rsync dev → prod
+├── cron/                       # DEV cron state (empty by default)
 ```
 
-> **PROD-owned files** — `MEMORY.md`, `memory/`, and `SYSTEM_LOG.md` live only in `workspace/`. The running agent writes to these; they are never overwritten by promotion. `CLAUDE.md` is the opposite: it exists only in `workspace-dev/` to guide Claude Code during development and is never promoted to production.
+> **PROD-owned files** — `MEMORY.md`, `memory/`, and `SYSTEM_LOG.md` live only in `~/.openclaw/workspace/`. The running agent writes to these; they are never overwritten by promotion. `CLAUDE.md` is the opposite: it exists only in `~/.openclaw-dev/workspace/` to guide Claude Code during development and is never promoted to production.
 
-Instead of one monolithic prompt, distribute configuration across OpenClaw's purpose-built workspace files. Create all files in `~/.openclaw/workspace-dev/` — the dev workspace is the source of truth:
+Instead of one monolithic prompt, distribute configuration across OpenClaw's purpose-built workspace files. Create all files in `~/.openclaw-dev/workspace/` — the dev workspace is the source of truth:
 
 **Before creating any files, collect these values. Every workspace file and skill references them:**
 
@@ -308,6 +314,8 @@ Instead of one monolithic prompt, distribute configuration across OpenClaw's pur
 | `[OPERATOR_NAME]` | Your name | USER.md, SOUL.md |
 | `[TIMEZONE]` | e.g., `America/New_York` | USER.md |
 | `[DATA_SHEET_ID]` | From your primary Google Sheet URL (between `/d/` and `/edit`) | SOUL.md, AGENTS.md, HEARTBEAT.md, USER.md, skills |
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the `[DATA_SHEET_ID]` row above and all references to it in workspace files.
 | `[GROUP_JID]` | WhatsApp group JID — run `openclaw logs --follow`, send a message in the group, read the `from` field (format: `31640053449-1633552575@g.us`) | `openclaw.json` channels.whatsapp.groups |
 | `[OWNER_PHONE_NUMBER]` | Your WhatsApp number in E.164 format (e.g., `+15551234567`) — include the `+` prefix in the actual value | `openclaw.json` channels.whatsapp.allowFrom |
 | `[OWNER_TELEGRAM_USER_ID]` | DM your Telegram bot → run `openclaw logs --follow` → read `from.id` (numeric), or DM `@userinfobot` on Telegram | `openclaw.json` channels.telegram.allowFrom |
@@ -328,6 +336,9 @@ You are [AGENT_PURPOSE]. You specialize in [AGENT_SPECIALIZATION].
 You are not a general-purpose assistant — stay within your domain.
 
 ## Data Architecture
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the Primary Data line below and replace with your chosen data backend.
+
 - **Primary Data:** Google Sheets (ID: [DATA_SHEET_ID]) — the single source of truth
   for operational data. Append new records; never delete rows.
 - **System Log:** Local file ~/.openclaw/workspace/SYSTEM_LOG.md — operational
@@ -411,9 +422,11 @@ You are not a general-purpose assistant — stay within your domain.
 - `message` — Send messages to configured channels
 - `memory_search` — Search memory index
 - `memory_get` — Retrieve memory entries
-- `gog` — Google Workspace CLI (Sheets, Drive, etc.)
+- `gog` — Google Workspace CLI (Sheets, Drive, etc.) *(if Google Sheets configured)*
 
 ### Exec (Restricted by Allowlist)
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the gog entry below.
+
 - `/home/clawuser/.local/bin/gog` — Google Workspace operations
 - `/home/clawuser/scripts/safe-git.sh` — Git operations (add, commit, push, status, log, diff only)
 - Additional entries per your exec-approvals.json allowlist
@@ -446,6 +459,8 @@ You are not a general-purpose assistant — stay within your domain.
 
 ## Data Access
 
+> **If you skipped Phase 2.5 (Google Sheets):** Omit this section.
+
 ### Google Sheets (via `gog sheets`)
 Read: `gog sheets read [SHEET_ID] [RANGE]`
 Write: `gog sheets update [SHEET_ID] [RANGE] --values '[[...]]'`
@@ -475,6 +490,9 @@ Always use `gog sheets` — this is the correct CLI command.
 - **Role:** System operator and administrator
 
 ## Data Sources
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit this section or replace with your data backend.
+
 - **Primary Sheet:** [DATA_SHEET_ID]
 - Additional sheets as configured in your skills
 ```
@@ -487,6 +505,9 @@ Always use `gog sheets` — this is the correct CLI command.
 ## Health Checks (run on heartbeat interval)
 
 ### 1. Data Connectivity
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit this check or replace with your data backend verification.
+
 - Verify Google Sheets access: `gog sheets read [DATA_SHEET_ID] A1:A1`
 - Expected: Returns a value without error
 
@@ -551,6 +572,8 @@ Run these checks immediately after the gateway starts or restarts:
 ```
 
 **3.9 — MEMORY.md (Long-Term Agent Memory)**
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the Data Sources section below or replace with your data backend.
 
 ```markdown
 # MEMORY.md — Long-Term Agent Memory
@@ -803,19 +826,19 @@ Merge the following into your `~/.openclaw/openclaw.json` (alongside the gateway
 
 **3.8b — Create the DEV Gateway Config**
 
-Copy `openclaw.json` and modify for development use:
+Copy `openclaw.json` to the DEV state directory and modify for development use:
 
 ```bash
-cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw-dev.json
+mkdir -p ~/.openclaw-dev
+cp ~/.openclaw/openclaw.json ~/.openclaw-dev/openclaw.json
 ```
 
-Edit `~/.openclaw/openclaw-dev.json` — change these three settings:
+Edit `~/.openclaw-dev/openclaw.json` — change these two settings:
 
-1. **Workspace path:** `"workspace": "~/.openclaw/workspace-dev"`
-2. **Gateway port:** `"port": 18790`
-3. **Remove all channel config:** Delete the entire `channels` and `plugins` sections (Telegram, WhatsApp)
+1. **Workspace path:** `"workspace": "~/.openclaw-dev/workspace"`
+2. **Remove all channel config:** Delete the entire `channels` and `plugins` sections (Telegram, WhatsApp)
 
-> **Why a separate config?** DEV needs a temporary Gateway for testing CRON jobs and sandbox behavior. Using a different port (18790) prevents conflicts with the always-on PROD Gateway, and removing channels prevents DEV from accidentally responding to real users. Start DEV with: `openclaw start --config ~/.openclaw/openclaw-dev.json`. Stop when done testing.
+> **Why a separate state directory?** DEV uses a completely isolated `~/.openclaw-dev/` directory with its own config, workspace, and cron state. The `--dev` flag tells OpenClaw to use this directory and automatically assigns a separate port (18790) to prevent conflicts with the always-on PROD Gateway. Removing channels prevents DEV from accidentally responding to real users. Start DEV with: `openclaw start --dev`. Stop when done testing.
 >
 > **SSH tunnel for DEV dashboard:** `ssh -L 18790:localhost:18790 clawuser@YOUR_DROPLET_IP` → open `http://localhost:18790`.
 
@@ -896,6 +919,8 @@ openclaw secrets reload
 **3.11 — Create Exec Approvals (Allowlist-Based Isolation)**
 
 Exec is enabled in `openclaw.json` (required for `gog` CLI access to Google Sheets), but tightly scoped via an allowlist. Only specific binaries can be executed — all other exec attempts are silently denied:
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the `gog` entry from the allowlist below.
 
 Create `~/.openclaw/exec-approvals.json`:
 ```json
@@ -980,6 +1005,7 @@ ANTHROPIC_API_KEY=<from console.anthropic.com>
 # GOOGLE_API_KEY=<from Google Cloud Console, if using Gemini fallback>
 
 # Google Sheets (required for gog CLI in agent sessions)
+# If you skipped Phase 2.5 (Google Sheets): Omit these two entries.
 GOG_ACCOUNT=<your Google account email>
 GOG_KEYRING_PASSWORD=<your keyring password>
 
@@ -995,7 +1021,7 @@ chmod 600 ~/.openclaw/.env
 
 Claude Code (installed in Phase 1.7) is used by the human operator only. Configure its permission rules for the development workspace so that even interactive Claude Code sessions cannot damage critical files:
 
-Create `~/.openclaw/workspace-dev/.claude/settings.json`:
+Create `~/.openclaw-dev/workspace/.claude/settings.json`:
 ```json
 {
   "permissions": {
@@ -1021,13 +1047,16 @@ Create `~/.openclaw/workspace-dev/.claude/settings.json`:
 
 This means: Claude Code can freely read/search everything (it needs full context). Destructive commands, config file edits, and secrets access are hard-blocked even if you accidentally approve them. All other actions (file edits, bash commands, git) use Normal mode — Claude Code asks you before each action.
 
-Create `~/.openclaw/workspace-dev/CLAUDE.md`:
+Create `~/.openclaw-dev/workspace/CLAUDE.md`:
 ```markdown
 # CLAUDE.md
 
 ## Project: [AGENT_NAME]
 
 ### Key Commands
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit the Google Sheets line and Data Integrity Rules below.
+
 - Google Sheets: `gog sheets read/update/append [DATA_SHEET_ID] [RANGE]`
 - Git (restricted): `~/scripts/safe-git.sh [add|commit|push|status|log|diff]`
 
@@ -1042,35 +1071,35 @@ Create `~/.openclaw/workspace-dev/CLAUDE.md`:
 - Error escalation: Always notify operator via Telegram
 ```
 
-> **Claude Code users:** To use Claude Code for skill development, `tmux attach -t claude-code`, then `cd ~/.openclaw/workspace-dev && claude`. Claude Code reads `CLAUDE.md` automatically for project context. Use `./scripts/promote.sh` to deploy changes to production.
+> **Claude Code users:** To use Claude Code for skill development, `tmux attach -t claude-code`, then `cd ~/.openclaw-dev/workspace && claude`. Claude Code reads `CLAUDE.md` automatically for project context. Use `./scripts/promote.sh` to deploy changes to production.
 
-**3.14 — Initialize workspace-dev as a Git Repository**
+**3.14 — Initialize DEV Workspace as a Git Repository**
 
 ```bash
-cd ~/.openclaw/workspace-dev
+cd ~/.openclaw-dev/workspace
 git init
 git add -A
-git commit -m "Initial workspace-dev setup"
+git commit -m "Initial DEV workspace setup"
 ```
 
 Create the test and scripts directories:
 
 ```bash
-mkdir -p ~/.openclaw/workspace-dev/tests
-mkdir -p ~/.openclaw/workspace-dev/scripts
+mkdir -p ~/.openclaw-dev/workspace/tests
+mkdir -p ~/.openclaw-dev/workspace/scripts
 ```
 
-Create `~/.openclaw/workspace-dev/scripts/promote.sh`:
+Create `~/.openclaw-dev/workspace/scripts/promote.sh`:
 ```bash
 #!/bin/bash
 set -euo pipefail
 
-DEV="$HOME/.openclaw/workspace-dev"
+DEV="$HOME/.openclaw-dev/workspace"
 PROD="$HOME/.openclaw/workspace"
 
 # Refuse if uncommitted changes exist
 if ! git -C "$DEV" diff --quiet || ! git -C "$DEV" diff --cached --quiet; then
-  echo "ERROR: workspace-dev has uncommitted changes. Commit first."
+  echo "ERROR: DEV workspace has uncommitted changes. Commit first."
   exit 1
 fi
 
@@ -1085,7 +1114,7 @@ SYNC_FILES=(
   BOOT.md
 )
 
-echo "=== Promote: workspace-dev → workspace ==="
+echo "=== Promote: DEV → PROD ==="
 echo ""
 
 # Diff preview
@@ -1138,7 +1167,7 @@ echo "Promoted to production. Changes take effect on next agent turn (hot-reload
 ```
 
 ```bash
-chmod +x ~/.openclaw/workspace-dev/scripts/promote.sh
+chmod +x ~/.openclaw-dev/workspace/scripts/promote.sh
 ```
 
 > **What promote.sh does:** Checks for uncommitted changes (refuses if any), shows a diff of what would change in the production workspace, asks for confirmation, then copies workspace files and skills. PROD-owned files (MEMORY.md, `memory/`, SYSTEM_LOG.md) are never touched. The Gateway hot-reloads on the next message — no restart needed.
@@ -1147,7 +1176,9 @@ chmod +x ~/.openclaw/workspace-dev/scripts/promote.sh
 
 ### Phase 4: Build Domain Skills
 
-Create custom skills in `~/.openclaw/workspace-dev/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gog sheets` CLI.
+> **If you skipped Phase 2.5 (Google Sheets):** The example skills below use Google Sheets. Adapt them to your chosen data backend or skip the data-oriented examples.
+
+Create custom skills in `~/.openclaw-dev/workspace/skills/` for each core business workflow. These skills use Google Sheets as the data backend via the `gog sheets` CLI.
 
 > **Claude Code users:** This is the highest-ROI phase for Claude Code. Give it all your placeholder values and let it create all skill files in one session. Example: `"Create all domain skills from the setup guide, using these sheet IDs: Data=[ID], Config=[ID], Contacts=[ID]"`.
 
@@ -1174,10 +1205,10 @@ Below are two example skills demonstrating common patterns. Replace these with y
 **4.1 — Daily Greeting Skill (Example: CRON + Messaging)**
 
 ```bash
-mkdir -p ~/.openclaw/workspace-dev/skills/daily-greeting
+mkdir -p ~/.openclaw-dev/workspace/skills/daily-greeting
 ```
 
-Create `~/.openclaw/workspace-dev/skills/daily-greeting/SKILL.md`:
+Create `~/.openclaw-dev/workspace/skills/daily-greeting/SKILL.md`:
 ```yaml
 ---
 name: daily-greeting
@@ -1200,13 +1231,15 @@ Send a friendly daily status greeting to the operator via Telegram DM.
    "Good morning! Today is {day_of_week}, {date}. You have {count} active records."
 ```
 
+> **If you skipped Phase 2.5 (Google Sheets):** Omit this example skill.
+
 **4.2 — Data Lookup Skill (Example: Google Sheets Query)**
 
 ```bash
-mkdir -p ~/.openclaw/workspace-dev/skills/data-lookup
+mkdir -p ~/.openclaw-dev/workspace/skills/data-lookup
 ```
 
-Create `~/.openclaw/workspace-dev/skills/data-lookup/SKILL.md`:
+Create `~/.openclaw-dev/workspace/skills/data-lookup/SKILL.md`:
 ```yaml
 ---
 name: data-lookup
@@ -1247,10 +1280,10 @@ Look up records in the primary data sheet matching a user's search term.
 **4.3 — Backup Automation Skill**
 
 ```bash
-mkdir -p ~/.openclaw/workspace-dev/skills/backup
+mkdir -p ~/.openclaw-dev/workspace/skills/backup
 ```
 
-Create `~/.openclaw/workspace-dev/skills/backup/SKILL.md`:
+Create `~/.openclaw-dev/workspace/skills/backup/SKILL.md`:
 ```markdown
 ---
 name: backup
@@ -1267,7 +1300,7 @@ metadata:
 Nightly at 11:59 PM (triggered by CRON), or when operator requests a manual backup.
 
 ## What Gets Backed Up
-The workspace-dev directory (~/.openclaw/workspace-dev/) which contains:
+The DEV workspace directory (~/.openclaw-dev/workspace/) which contains:
 - SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, USER.md, HEARTBEAT.md
 - All skills (skills/**/SKILL.md)
 - SYSTEM_LOG.md, MEMORY.md, memory/ files
@@ -1284,14 +1317,14 @@ This backup covers agent configuration, skills, memory, and operational logs.
    "Backup failed at [timestamp]: [error]"
 
 ## NEVER
-- Push anything outside ~/.openclaw/workspace-dev/.
+- Push anything outside ~/.openclaw-dev/workspace/.
 - Modify the backup script itself.
 - Store credentials in any workspace file.
 ```
 
 > **Building your own skills:** The examples above demonstrate two common patterns: CRON-triggered reporting (daily-greeting) and user-triggered data lookup (data-lookup). Your domain skills will follow the same structure but with your specific data schemas, business logic, and messaging templates. Use the runbook format (When to Use → Workflow → Edge Cases → Output) for consistent, reliable agent behavior.
 
-> **Deploy skills to production:** After creating and testing skills, commit them in workspace-dev and run `./scripts/promote.sh` to sync to the production workspace.
+> **Deploy skills to production:** After creating and testing skills, commit them in the DEV workspace and run `./scripts/promote.sh` to sync to the production workspace.
 
 ---
 
@@ -1304,7 +1337,7 @@ Create `~/scripts/daily_backup.sh` (the `~/scripts/` directory was created in Ph
 cat > ~/scripts/daily_backup.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
-cd ~/.openclaw/workspace-dev
+cd ~/.openclaw-dev/workspace
 git add -A
 git commit -m "Auto-backup $(date +%Y-%m-%d_%H:%M)" || echo "No changes to commit"
 git push origin main
@@ -1332,13 +1365,13 @@ EOF
 chmod 600 ~/.ssh/config
 ```
 
-Add the backup remote to workspace-dev (already initialized in Phase 3.14):
+Add the backup remote to the DEV workspace (already initialized in Phase 3.14):
 ```bash
-cd ~/.openclaw/workspace-dev
+cd ~/.openclaw-dev/workspace
 git remote add origin git@github-backup:[BACKUP_REPO].git
 ```
 
-Create `~/.openclaw/workspace-dev/.gitignore` to prevent committing sensitive or generated files:
+Create `~/.openclaw-dev/workspace/.gitignore` to prevent committing sensitive or generated files:
 ```
 # SQLite memory index (derived, not canonical)
 *.sqlite
@@ -1358,7 +1391,7 @@ Thumbs.db
 
 > Do NOT use `git config --global credential.helper store` — this writes tokens in plaintext to disk where the agent can read them. Use SSH deploy keys instead.
 
-> **PROD-owned state:** The production workspace contains agent-managed files (MEMORY.md, `memory/`, SYSTEM_LOG.md) that are not in workspace-dev. To back these up, add them to the daily backup script: `cp ~/.openclaw/workspace/MEMORY.md ~/.openclaw/workspace-dev/prod-state/ && cp -r ~/.openclaw/workspace/memory/ ~/.openclaw/workspace-dev/prod-state/memory/` — or set up a separate backup for the production workspace.
+> **PROD-owned state:** The production workspace contains agent-managed files (MEMORY.md, `memory/`, SYSTEM_LOG.md) that are not in the DEV workspace. To back these up, add them to the daily backup script: `cp ~/.openclaw/workspace/MEMORY.md ~/.openclaw-dev/workspace/prod-state/ && cp -r ~/.openclaw/workspace/memory/ ~/.openclaw-dev/workspace/prod-state/memory/` — or set up a separate backup for the production workspace.
 
 **5.3 — Register CRON Jobs via OpenClaw**
 
@@ -1367,7 +1400,7 @@ Use OpenClaw's built-in CRON system rather than raw system crontab. Below are th
 ```bash
 # System event jobs (session=main, exec access)
 openclaw cron add --name "daily-backup" --cron "59 23 * * *" --message "bash ~/scripts/daily_backup.sh"
-openclaw cron add --name "hourly-checkpoint" --cron "0 * * * *" --message "bash -c 'cd ~/.openclaw/workspace-dev && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
+openclaw cron add --name "hourly-checkpoint" --cron "0 * * * *" --message "bash -c 'cd ~/.openclaw-dev/workspace && git add -A && git diff --cached --quiet || git commit -m \"auto: $(date +%Y-%m-%d-%H%M)\"'"
 
 # Example: Daily greeting — every day at 9:00 AM UTC
 openclaw cron add --name "daily-greeting" --cron "0 9 * * *" --tz "[TIMEZONE]" --message "Run daily-greeting skill: send morning status to operator Telegram." --timeout-seconds 60
@@ -1391,6 +1424,8 @@ Add your own CRON jobs for domain-specific skills:
 > For timeouts on `agentTurn` jobs, use `--timeout-seconds <n>` (not `--timeout`). Default is 30s; batch jobs with Google Sheets reads + DMs need 300s.
 
 **5.4 — Initialize Workspace Data**
+
+> **If you skipped Phase 2.5 (Google Sheets):** Omit all Google Sheets references in the SYSTEM_LOG.md template below.
 
 Your business data lives in Google Sheets (created in Phase 2.5). Initialize the local workspace files that the agent still needs:
 
@@ -1434,7 +1469,7 @@ Create `~/.openclaw/workspace/SYSTEM_LOG.md` (if not already created in Phase 3.
 | `openclaw.json` complete with all sections (auth, agents, tools, channels, gateway, cron, plugins) | |
 | `exec-approvals.json` created with allowlist entries | |
 | `.env` file populated with all secrets (GATEWAY_AUTH_TOKEN, TELEGRAM_BOT_TOKEN, API keys) | |
-| Google Sheets created and IDs recorded | |
+| Google Sheets created and IDs recorded *(skip if Phase 2.5 skipped)* | |
 | SSH deploy keys generated and added to GitHub | |
 | Workspace initialized as git repo with remote | |
 | Docker sandbox image built | |
@@ -1492,6 +1527,7 @@ claude --permission-mode dontAsk "Try to run: sudo apt update"
 # Should FAIL silently (sudo denied in .claude/settings.json)
 
 # 10. Verify Google Sheets connectivity (REQUIRES: Phase 2.5.3 OAuth completed)
+# If you skipped Phase 2.5 (Google Sheets): Skip this test.
 gog sheets read [DATA_SHEET_ID] "Sheet1!A1:A1"
 # Should return your header row
 
@@ -1576,6 +1612,7 @@ grep -A 5 '"sandbox"' ~/.openclaw/openclaw.json | grep -A 5 '"tools"'
 # 29. Test your domain-specific skill flow end-to-end:
 #     - Trigger a skill via the appropriate channel
 #     - Verify data is read/written correctly in Google Sheets
+#       (If you skipped Phase 2.5: verify with your data backend instead)
 #     - Verify response messages arrive in the correct channel
 
 # 30. Check context and model status
@@ -1598,6 +1635,8 @@ grep -A 5 '"sandbox"' ~/.openclaw/openclaw.json | grep -A 5 '"tools"'
 - If WhatsApp disconnects later, reconnect with `openclaw channels reconnect whatsapp`.
 - Check connection status: `openclaw status` or `openclaw channels list`.
 
+> **If you skipped Phase 2.5 (Google Sheets):** Skip this section.
+
 **Google Sheets auth fails:**
 - Verify credentials file exists: `ls -la ~/.openclaw/credentials/google-oauth-client.json`
 - Re-authorize: delete the cached token (`rm ~/.openclaw/credentials/google-sheets-token.json`) and trigger a fresh OAuth flow by running any `gog sheets` command.
@@ -1619,8 +1658,8 @@ grep -A 5 '"sandbox"' ~/.openclaw/openclaw.json | grep -A 5 '"tools"'
 **Backup push fails:**
 - Verify deploy key is added to GitHub repo: `ssh -T git@github-backup` — should say "successfully authenticated."
 - Check SSH config: `cat ~/.ssh/config | grep -A 4 github-backup`
-- Verify remote URL: `cd ~/.openclaw/workspace-dev && git remote -v`
-- Check git status: `cd ~/.openclaw/workspace-dev && git status`
+- Verify remote URL: `cd ~/.openclaw-dev/workspace && git remote -v`
+- Check git status: `cd ~/.openclaw-dev/workspace && git status`
 
 **Memory search returns empty results:**
 - Known SQLite index issues (GitHub issues #4868, #9888, #7464) can cause empty vector/BM25 search results.
@@ -1638,7 +1677,7 @@ Setup is not a one-time event. Schedule these recurring maintenance tasks:
 - Review `SYSTEM_LOG.md` for unexpected entries, failed operations, or injection alerts.
 - Review `memory/` files for suspicious content (memory poisoning indicator): `grep -r "ignore\|override\|new instructions\|act as" ~/.openclaw/workspace/memory/`
 - Check API usage at your provider's dashboard (Anthropic Console, OpenRouter, etc.).
-- Verify backups are arriving in the GitHub repo: `cd ~/.openclaw/workspace-dev && git log --oneline -5`
+- Verify backups are arriving in the GitHub repo: `cd ~/.openclaw-dev/workspace && git log --oneline -5`
 - Verify exec is scoped via allowlist: `grep '"security"' ~/.openclaw/exec-approvals.json` (must show `"allowlist"`).
 - Verify email isolation holds: `grep '"email_send"' ~/.openclaw/openclaw.json` (must be in deny list).
 - Audit approved pairings: `openclaw pairing list --approved whatsapp` and `openclaw pairing list --approved telegram`. Remove any unrecognized contacts. Note: previously approved pairings persist in `~/.openclaw/credentials/` and survive config changes.
@@ -1658,20 +1697,20 @@ Setup is not a one-time event. Schedule these recurring maintenance tasks:
 - Rotate GitHub deploy keys: generate a new key, update the deploy key in GitHub settings, remove the old one.
 - Rotate LLM API keys at your provider and update `~/.openclaw/openclaw.json`.
 - Rotate Claude Code authentication: re-run `claude` to refresh OAuth, or rotate API key in `~/.bashrc.local`.
-- Review Google Sheets OAuth access: Google Account → Security → Third-party apps. Confirm the agent's project only has Sheets API scope. Revoke and reauthorize if scope has expanded.
+- Review Google Sheets OAuth access: Google Account → Security → Third-party apps. Confirm the agent's project only has Sheets API scope. Revoke and reauthorize if scope has expanded. *(If you skipped Phase 2.5: skip this step.)*
 - Review DigitalOcean snapshots — confirm they're being created and prune old ones.
-- Test a full restore: spin up a new Droplet from a snapshot, verify the agent boots, connects to Google Sheets, and processes a test request.
+- Test a full restore: spin up a new Droplet from a snapshot, verify the agent boots, connects to Google Sheets, and processes a test request. *(If you skipped Phase 2.5: omit Google Sheets from this test.)*
 
 **Skill Editing Workflow (when needs change):**
 
 When you need to update skills — new data schemas, changed workflows, seasonal adjustments — follow this workflow:
 
 1. SSH into the Droplet and attach to Claude Code: `tmux attach -t claude-code`
-2. Navigate to dev workspace: `cd ~/.openclaw/workspace-dev`
+2. Navigate to dev workspace: `cd ~/.openclaw-dev/workspace`
 3. Edit the skill using Claude Code (`claude`) or a text editor:
    - Existing skill: modify `skills/<skill-name>/SKILL.md`
    - New skill: `mkdir -p skills/<new-skill>` → create `SKILL.md` with YAML frontmatter (see Phase 4 examples)
-4. (Optional) Test with DEV Gateway: `openclaw start --config ~/.openclaw/openclaw-dev.json` — send test messages via the DEV dashboard (`http://localhost:18790` via SSH tunnel). Stop when done.
+4. (Optional) Test with DEV Gateway: `openclaw start --dev` — send test messages via the DEV dashboard (`http://localhost:18790` via SSH tunnel). Stop when done.
 5. Commit: `git add -A && git commit -m "skill update: [description]"`
 6. Promote to production: `./scripts/promote.sh` — review the diff, confirm deployment.
 7. Verify: send a test message via WhatsApp group or Telegram DM. The PROD Gateway hot-reloads on next turn.
@@ -1705,7 +1744,7 @@ When you need to update skills — new data schemas, changed workflows, seasonal
 2. **Review the session transcript:** Check `~/.openclaw/agents/*/sessions/` for the active session JSONL.
 3. **Review memory for poisoning:** `grep -r "ignore\|override\|forget\|new instructions" ~/.openclaw/workspace/memory/`
 4. **Check for unauthorized CRON jobs:** `openclaw cron list`
-5. **Restore from backup if needed:** `cd ~/.openclaw/workspace-dev && git log --oneline` then `git checkout <last-known-good-commit>` followed by `./scripts/promote.sh` to push the fix to production.
+5. **Restore from backup if needed:** `cd ~/.openclaw-dev/workspace && git log --oneline` then `git checkout <last-known-good-commit>` followed by `./scripts/promote.sh` to push the fix to production.
 6. **Check for denied tool attempts:** `grep -r "email_send\|email_read\|gmail\|exec\|claude" ~/.openclaw/agents/*/sessions/` — any hits indicate the agent tried to use denied tools.
 7. **Rotate all credentials** before restarting the agent.
 
@@ -1763,10 +1802,12 @@ When you need to update skills — new data schemas, changed workflows, seasonal
 | **Sender trust levels** | **`SOUL.md` → Communication Rules** | **Reasoning** | **Operator (trusted) vs user (untrusted) scoping** |
 | **Injection defense rules** | **`SOUL.md` → Prompt Injection Defense** | **Reasoning** | **Explicit instructions to treat user input as adversarial** |
 | **Claude Code binary** | **`~/.local/bin/claude`** | **OS** | **Human operator tool only; OpenClaw cannot access** |
-| **Claude Code workspace rules** | **`~/.openclaw/workspace-dev/.claude/settings.json`** | **Claude Code** | **Deny rules protect openclaw.json, secrets, sudo** |
-| **Claude Code project context** | **`~/.openclaw/workspace-dev/CLAUDE.md`** | **Soft guidance** | **Context for Claude Code (not a security boundary)** |
-| **DEV Gateway config** | **`~/.openclaw/openclaw-dev.json`** | **Execution** | **Temporary Gateway on port 18790, no channels, workspace-dev** |
-| **DEV → PROD promotion** | **`~/.openclaw/workspace-dev/scripts/promote.sh`** | **Workflow** | **Git-aware rsync with diff preview and confirmation** |
-| **Workspace source of truth** | **`~/.openclaw/workspace-dev/`** | **Workflow** | **Git repo — all edits happen here, promoted to workspace/** |
+| **Claude Code workspace rules** | **`~/.openclaw-dev/workspace/.claude/settings.json`** | **Claude Code** | **Deny rules protect openclaw.json, secrets, sudo** |
+| **Claude Code project context** | **`~/.openclaw-dev/workspace/CLAUDE.md`** | **Soft guidance** | **Context for Claude Code (not a security boundary)** |
+| **DEV Gateway config** | **`~/.openclaw-dev/openclaw.json`** | **Execution** | **DEV state dir with `--dev` flag, no channels** |
+| **DEV → PROD promotion** | **`~/.openclaw-dev/workspace/scripts/promote.sh`** | **Workflow** | **Git-aware rsync with diff preview and confirmation** |
+| **Workspace source of truth** | **`~/.openclaw-dev/workspace/`** | **Workflow** | **Git repo — all edits happen here, promoted to ~/.openclaw/workspace/** |
 | **Claude Code auth** | **`~/.claude/` or `~/.bashrc.local`** | **OS** | **Separate from OpenClaw auth; rotate quarterly** |
 | **Claude Code sessions** | **`tmux attach -t claude-code`** | **OS** | **Persistent terminal sessions for human operator** |
+
+> **If you skipped Phase 2.5 (Google Sheets):** The rows referencing Google Sheets, `gog`, Google OAuth credentials, Sheets API, and `[DATA_SHEET_ID]` in the table above do not apply to your deployment.
