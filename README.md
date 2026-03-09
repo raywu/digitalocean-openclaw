@@ -4,14 +4,14 @@ Documentation for a **live deployed** OpenClaw instance (open-source, self-hoste
 
 ## Documents
 
-- **`doc/openclaw-setup-guide.md`** — Production deployment walkthrough for Ubuntu 24.04 on DigitalOcean
-- **`doc/prompt-claude-code-openclaw-setup.md`** — Interactive Claude Code prompt for guided setup
-- **`doc/prompt-multi-agent-openclaw-setup.md`** — Multi-agent orchestration prompt
-- **`doc/reference-openclaw-digitalocean-setup-evaluation.md`** — Architecture evaluation: seven-layer architecture with dual specialization/security analysis
-- **`doc/reference-openclaw-order-crm-tools-skills.md`** — Order/CRM skill reference
-- **`doc/reference-openclaw-shopify-gmail-research-report.md`** — Shopify/Gmail integration research
-- **`doc/reference-openclaw-skill-editing-report.md`** — Skill editing patterns
-- **`doc/reference-whatsapp-injection-defense-analysis.md`** — WhatsApp injection defense analysis
+- **`docs/openclaw-setup-guide.md`** — Production deployment walkthrough for Ubuntu 24.04 on DigitalOcean
+- **`docs/prompt-claude-code-openclaw-setup.md`** — Interactive Claude Code prompt for guided setup
+- **`docs/prompt-multi-agent-openclaw-setup.md`** — Multi-agent orchestration prompt
+- **`docs/references/reference-openclaw-digitalocean-setup-evaluation.md`** — Architecture evaluation: seven-layer architecture with dual specialization/security analysis
+- **`docs/references/reference-openclaw-order-crm-tools-skills.md`** — Order/CRM skill reference
+- **`docs/references/reference-openclaw-shopify-gmail-research-report.md`** — Shopify/Gmail integration research
+- **`docs/references/reference-openclaw-skill-editing-report.md`** — Skill editing patterns
+- **`docs/references/reference-whatsapp-injection-defense-analysis.md`** — WhatsApp injection defense analysis
 
 ## Deployed Skills
 

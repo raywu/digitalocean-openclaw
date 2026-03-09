@@ -14,11 +14,11 @@ This is a documentation repository for the **OpenClaw** open-source, self-hosted
 
 **Other:**
 - **`prompt-multi-agent-openclaw-setup.md`** — Multi-agent orchestration prompt (pre-v3, not yet updated)
-- **`reference-openclaw-digitalocean-setup-evaluation.md`** — Architecture evaluation: seven-layer architecture with dual specialization/security analysis
-- **`reference-openclaw-order-crm-tools-skills.md`** — Order/CRM skill reference
-- **`reference-openclaw-shopify-gmail-research-report.md`** — Shopify/Gmail integration research
-- **`reference-openclaw-skill-editing-report.md`** — Skill editing patterns
-- **`reference-whatsapp-injection-defense-analysis.md`** — WhatsApp injection defense analysis
+- **`references/reference-openclaw-digitalocean-setup-evaluation.md`** — Architecture evaluation: seven-layer architecture with dual specialization/security analysis
+- **`references/reference-openclaw-order-crm-tools-skills.md`** — Order/CRM skill reference
+- **`references/reference-openclaw-shopify-gmail-research-report.md`** — Shopify/Gmail integration research
+- **`references/reference-openclaw-skill-editing-report.md`** — Skill editing patterns
+- **`references/reference-whatsapp-injection-defense-analysis.md`** — WhatsApp injection defense analysis
 
 ## Key Config Patterns
 
